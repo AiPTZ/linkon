@@ -12,7 +12,6 @@ import { DisparoNewPage } from "./pages/DisparoNewPage";
 import { DisparoSelectPage } from "./pages/DisparoSelectPage";
 import { FlowPage } from "./pages/FlowPage";
 import { ConnectPage } from "./pages/ConnectPage";
-import { SweepPage } from "./pages/SweepPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AdminPage } from "./pages/AdminPage";
 
@@ -46,10 +45,10 @@ export default function App() {
             <Route path="/campanhas/:id" element={<CampaignDetailPage />} />
             <Route path="/campanhas/:id/fluxo" element={<FlowPage />} />
             <Route path="/conectar" element={<ConnectPage />} />
-            <Route path="/rede" element={<SweepPage />} />
             <Route path="/disparos" element={<DisparosPage />} />
             <Route path="/disparos/nova" element={<DisparoNewPage />} />
             <Route path="/disparos/:id/selecionar" element={<DisparoSelectPage />} />
+            <Route path="/disparos/:id" element={<CampaignDetailPage />} />
             <Route path="/configuracoes" element={<SettingsPage />} />
             <Route path="/administracao" element={<AdminPage />} />
           </Route>
