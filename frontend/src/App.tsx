@@ -9,6 +9,7 @@ import { CampaignNewPage } from "./pages/CampaignNewPage";
 import { CampaignDetailPage } from "./pages/CampaignDetailPage";
 import { DisparosPage } from "./pages/DisparosPage";
 import { DisparoNewPage } from "./pages/DisparoNewPage";
+import { DisparoSelectPage } from "./pages/DisparoSelectPage";
 import { FlowPage } from "./pages/FlowPage";
 import { ConnectPage } from "./pages/ConnectPage";
 import { SweepPage } from "./pages/SweepPage";
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/rede" element={<SweepPage />} />
             <Route path="/disparos" element={<DisparosPage />} />
             <Route path="/disparos/nova" element={<DisparoNewPage />} />
+            <Route path="/disparos/:id/selecionar" element={<DisparoSelectPage />} />
             <Route path="/configuracoes" element={<SettingsPage />} />
             <Route path="/administracao" element={<AdminPage />} />
           </Route>
