@@ -80,7 +80,7 @@ export function DisparosPage() {
                   <h2 className="font-serif text-lg font-medium leading-snug text-cream group-hover:text-gold-400">
                     {c.name}
                   </h2>
-                  <StatusBadge status={c.status} kind="campaign" />
+                  <StatusBadge status={c.status} kind="campaign" mode={c.mode} />
                 </div>
                 <div className="mt-1 text-xs text-cream/40">
                   Conta: {shortName(c.account.username, "—")}

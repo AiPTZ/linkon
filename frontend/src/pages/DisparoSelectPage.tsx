@@ -49,7 +49,7 @@ export function DisparoSelectPage() {
   }, [id]);
 
   const loadLeads = useCallback(() => {
-    const qs = new URLSearchParams({ page: String(page), pageSize: "50" });
+    const qs = new URLSearchParams({ page: String(page), pageSize: "50", selected: "all" });
     if (appliedQuery.trim()) qs.set("q", appliedQuery.trim());
     api
       .get<Paginated<Lead>>(`/campaigns/${id}/leads?${qs.toString()}`)
@@ -135,7 +135,7 @@ export function DisparoSelectPage() {
             <h1 className="font-serif text-3xl font-semibold gold-gradient-text">
               {campaign.name}
             </h1>
-            <StatusBadge status={campaign.status} kind="campaign" />
+            <StatusBadge status={campaign.status} kind="campaign" mode={campaign.mode} />
           </div>
           <p className="mt-1 text-sm text-cream/50">
             Selecione os contatos da rede que receberão o disparo

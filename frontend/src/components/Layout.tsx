@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Link2, Settings, ShieldCheck, UserPlus, X, Menu, Plus, LogOut, Home, Sun, Moon, Radar } from "lucide-react";
+import { Link2, Settings, ShieldCheck, UserPlus, X, Menu, Plus, LogOut, Home, Sun, Moon, Radar, HelpCircle } from "lucide-react";
 import { useState } from "react";
 import { Logo } from "./Logo";
 import { useAuth } from "../lib/auth";
@@ -13,6 +13,7 @@ const NAV = [
   { to: "/conectar", label: "Contas LinkedIn", icon: UserPlus },
   { to: "/administracao", label: "Administração", icon: ShieldCheck },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
+  { to: "/tutorial", label: "Tutorial", icon: HelpCircle },
 ];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {

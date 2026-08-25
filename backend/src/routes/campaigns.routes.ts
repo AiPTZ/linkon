@@ -324,14 +324,20 @@ campaignsRouter.get(
     const where: Prisma.LeadWhereInput = { campaignId: req.params.id };
     if (status) where.status = status;
     const sel = req.query.selected;
-    if (sel === "true" || sel === "false") where.selected = sel === "true";
+    let orderBy: Prisma.LeadOrderByWithRelationInput = { createdAt: "desc" };
+    if (campaign.mode === "DISPARO" && sel !== "all" && sel !== "true" && sel !== "false") {
+      where.selected = true;
+      orderBy = { createdAt: "asc" };
+    } else if (sel === "true" || sel === "false") {
+      where.selected = sel === "true";
+    }
     if (typeof req.query.q === "string" && req.query.q.trim()) {
       where.OR = [{ name: { contains: req.query.q.trim() } }];
     }
     const [items, total] = await Promise.all([
       prisma.lead.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),

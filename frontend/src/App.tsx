@@ -14,6 +14,7 @@ import { FlowPage } from "./pages/FlowPage";
 import { ConnectPage } from "./pages/ConnectPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AdminPage } from "./pages/AdminPage";
+import { TutorialPage } from "./pages/TutorialPage";
 
 function RequireAuth() {
   const { user, loading } = useAuth();
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/disparos/:id" element={<CampaignDetailPage />} />
             <Route path="/configuracoes" element={<SettingsPage />} />
             <Route path="/administracao" element={<AdminPage />} />
+            <Route path="/tutorial" element={<TutorialPage />} />
           </Route>
         </Route>
 

@@ -1,0 +1,196 @@
+import { prisma } from "../lib/prisma";
+import { unipile, type UnipileAccount } from "./unipile.service";
+import { configService } from "./config.service";
+import { createLog } from "./log.service";
+import { encrypt } from "../utils/crypto";
+import { env } from "../config/env";
+import { ApiError } from "../utils/errors";
+
+export interface NativeAuthResult {
+  checkpoint?: string;
+  account?: UnipileAccount;
+  localAccountId?: string;
+}
+
+export async function connectNative(
+  username: string,
+  password: string,
+  country?: string,
+): Promise<NativeAuthResult> {
+  const result = await unipile.connectLinkedinNative(username, password, country);
+
+  if (result.checkpoint && result.account_id) {
+    const local = await prisma.account.upsert({
+      where: { unipileAccountId: result.account_id },
+      update: {
+        status: "CHECKPOINT",
+        checkpointType: result.checkpoint.type,
+        username,
+        credentialsEnc: encrypt(JSON.stringify({ username, password })),
+      },
+      create: {
+        unipileAccountId: result.account_id,
+        username,
+        authMethod: "NATIVE",
+        status: "CHECKPOINT",
+        checkpointType: result.checkpoint.type,
+        credentialsEnc: encrypt(JSON.stringify({ username, password })),
+      },
+    });
+    return { checkpoint: result.checkpoint.type, localAccountId: local.id };
+  }
+
+  const account = result as unknown as UnipileAccount;
+  const local = await prisma.account.upsert({
+    where: { unipileAccountId: account.id },
+    update: {
+      status: "OK",
+      checkpointType: null,
+      username,
+      authMethod: "NATIVE",
+      credentialsEnc: encrypt(JSON.stringify({ username, password })),
+    },
+    create: {
+      unipileAccountId: account.id,
+      username,
+      authMethod: "NATIVE",
+      status: "OK",
+      credentialsEnc: encrypt(JSON.stringify({ username, password })),
+    },
+  });
+  return { account, localAccountId: local.id };
+}
+
+export async function solveCheckpoint(
+  localAccountId: string,
+  code: string,
+): Promise<NativeAuthResult> {
+  const local = await prisma.account.findUnique({ where: { id: localAccountId } });
+  if (!local) throw new ApiError(404, "Conta não encontrada");
+
+  const result = await unipile.solveCheckpoint(local.unipileAccountId, code);
+
+  if (result.checkpoint && result.checkpoint.type) {
+    await prisma.account.update({
+      where: { id: localAccountId },
+      data: { checkpointType: result.checkpoint.type },
+    });
+    return { checkpoint: result.checkpoint.type, localAccountId };
+  }
+
+  await prisma.account.update({
+    where: { id: localAccountId },
+    data: { status: "OK", checkpointType: null },
+  });
+  await createLog({
+    type: "ACCOUNT_CONNECTED",
+    message: "Conta LinkedIn conectada com sucesso",
+    accountId: localAccountId,
+  });
+  return { localAccountId };
+}
+
+export async function createHostedAuthUrl(): Promise<{ url: string }> {
+  const dsn = await configService.unipileDsn();
+  if (!dsn) throw new ApiError(503, "Unipile DSN não configurado");
+
+  const apiUrl = dsn.replace(/\/+$/, "");
+  const expiresOn = new Date(Date.now() + 10 * 60_000).toISOString();
+  const frontendOrigin = env.FRONTEND_ORIGIN;
+
+  const result = await unipile.createHostedAuthLink({
+    apiUrl,
+    expiresOn,
+    successRedirectUrl: `${frontendOrigin}/conectar?hosted=ok`,
+    failureRedirectUrl: `${frontendOrigin}/conectar?hosted=error`,
+    name: "Link ON hosted auth",
+  });
+  return { url: result.url };
+}
+
+export async function registerWebhooks(): Promise<{ messagingId?: string; usersId?: string }> {
+  const webhookBase =
+    (await configService.get("webhookPublicUrl")) || env.WEBHOOK_PUBLIC_URL;
+  if (!webhookBase) {
+    throw new ApiError(
+      400,
+      "URL pública do webhook não configurada. Defina WEBHOOK_PUBLIC_URL no .env ou na página de Configurações.",
+    );
+  }
+
+  const requestUrl = `${webhookBase.replace(/\/+$/, "")}/api/webhooks/unipile`;
+  const headers = [{ key: "Unipile-Auth", value: env.UNIPILE_WEBHOOK_SECRET }];
+  const existing = await prisma.webhookRegistration.findMany();
+  const result: { messagingId?: string; usersId?: string } = {};
+
+  if (!existing.some((w) => w.source === "messaging")) {
+    const wh = await unipile.createWebhook({
+      requestUrl,
+      source: "messaging",
+      events: ["message_received"],
+      headers,
+      name: "Link ON messaging",
+    });
+    await prisma.webhookRegistration.create({
+      data: { unipileWebhookId: wh.webhook_id, source: "messaging", requestUrl },
+    });
+    result.messagingId = wh.webhook_id;
+  }
+
+  if (!existing.some((w) => w.source === "users")) {
+    const wh = await unipile.createWebhook({
+      requestUrl,
+      source: "users",
+      events: ["new_relation"],
+      headers,
+      name: "Link ON users",
+    });
+    await prisma.webhookRegistration.create({
+      data: { unipileWebhookId: wh.webhook_id, source: "users", requestUrl },
+    });
+    result.usersId = wh.webhook_id;
+  }
+
+  return result;
+}
+
+export async function syncAccounts(): Promise<void> {
+  const { items = [] } = await unipile.listAccounts();
+  for (const acc of items) {
+    const status = acc.sources?.[0]?.status ?? acc.status ?? "OK";
+    await prisma.account.upsert({
+      where: { unipileAccountId: acc.id },
+      update: { status, username: acc.name },
+      create: {
+        unipileAccountId: acc.id,
+        username: acc.name,
+        status,
+        authMethod: "HOSTED",
+      },
+    });
+  }
+}
+
+export async function disconnectAccount(localAccountId: string): Promise<void> {
+  const local = await prisma.account.findUnique({ where: { id: localAccountId } });
+  if (!local) throw new ApiError(404, "Conta não encontrada");
+
+  await unipile.deleteAccount(local.unipileAccountId);
+
+  await prisma.$transaction([
+    prisma.account.update({
+      where: { id: localAccountId },
+      data: { status: "DISCONNECTED", checkpointType: null },
+    }),
+    prisma.campaign.updateMany({
+      where: { accountId: localAccountId, status: { in: ["RUNNING", "IMPORTING"] } },
+      data: { status: "PAUSED" },
+    }),
+  ]);
+  await createLog({
+    type: "ACCOUNT_DISCONNECTED",
+    level: "WARN",
+    message: `Conta ${local.username ?? local.unipileAccountId} desconectada do LinkedIn`,
+    accountId: localAccountId,
+  });
+}

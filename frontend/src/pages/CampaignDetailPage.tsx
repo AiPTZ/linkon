@@ -177,7 +177,7 @@ export function CampaignDetailPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="font-serif text-3xl font-semibold gold-gradient-text">{campaign.name}</h1>
-            <StatusBadge status={campaign.status} kind="campaign" />
+            <StatusBadge status={campaign.status} kind="campaign" mode={campaign.mode} />
           </div>
           <p className="mt-1 text-sm text-cream/50">
             Conta: {shortName(campaign.account.username, "—")} · Criada em{" "}
@@ -378,7 +378,7 @@ export function CampaignDetailPage() {
 
       {tab === "leads" && (
         <div className="card">
-          <div className="flex items-center gap-2 border-b border-ink-400 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 border-b border-ink-400 px-4 py-3">
             <label htmlFor="leadFilter" className="label !mb-0">Filtrar</label>
             <select
               id="leadFilter"
@@ -395,6 +395,12 @@ export function CampaignDetailPage() {
                 </option>
               ))}
             </select>
+            {isBroadcast && (
+              <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-cream/45">
+                <ListChecks className="h-3.5 w-3.5" />
+                Exibindo apenas os contatos selecionados, em ordem de envio
+              </span>
+            )}
           </div>
 
           {!leads ? (
@@ -403,7 +409,11 @@ export function CampaignDetailPage() {
             <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
               <Inbox className="h-8 w-8 text-cream/30" />
               <p className="text-sm text-cream/50">
-                {leadStatus ? "Nenhum lead neste status." : "Nenhum lead ainda. Inicie a campanha para importar os resultados da busca."}
+                {leadStatus
+                  ? "Nenhum lead neste status."
+                  : isBroadcast
+                    ? "Nenhum contato selecionado para o disparo ainda. Use \"Selecionar contatos\" para montar a lista de envio."
+                    : "Nenhum lead ainda. Inicie a campanha para importar os resultados da busca."}
               </p>
             </div>
           ) : (
