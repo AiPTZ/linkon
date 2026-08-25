@@ -5,6 +5,7 @@ import {
   CheckCheck,
   ExternalLink,
   Inbox,
+  ListChecks,
   Loader2,
   MessageCircle,
   Pause,
@@ -163,6 +164,7 @@ export function CampaignDetailPage() {
   const canPause = campaign.status === "RUNNING" || campaign.status === "IMPORTING";
   const canResume =
     campaign.status === "PAUSED" || campaign.status === "LIMIT_HIT" || campaign.status === "COMPLETED";
+  const canSelect = isBroadcast && ["DRAFT", "PAUSED", "ERROR"].includes(campaign.status);
 
   return (
     <div>
@@ -191,6 +193,16 @@ export function CampaignDetailPage() {
             <Workflow className="h-4 w-4" />
             Fluxo
           </button>
+          {canSelect && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => navigate(`/disparos/${id}/selecionar`)}
+            >
+              <ListChecks className="h-4 w-4" />
+              Selecionar contatos
+            </button>
+          )}
           {canStart && (
             <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => action("start")}>
               {busy === "start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}

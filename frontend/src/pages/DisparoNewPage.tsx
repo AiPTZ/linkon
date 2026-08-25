@@ -167,12 +167,12 @@ export function DisparoNewPage() {
             <textarea
               id="message"
               className="input min-h-32 resize-y"
-              maxLength={1000}
+              maxLength={300}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Olá {nome}, ..."
             />
-            <p className="mt-1 text-right text-xs text-cream/40">{message.length}/1000</p>
+            <p className="mt-1 text-right text-xs text-cream/40">{message.length}/300</p>
           </div>
           <p className="text-xs text-cream/40">
             Dica: use <code className="rounded bg-ink-700 px-1 py-0.5 text-gold-400">{"{nome}"}</code> e{" "}

@@ -27,6 +27,7 @@ vi.mock("../utils/time", async (importOriginal) => {
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
+import { notify } from "./notification.service";
 import {
   importLeadsFromSweep,
   previewRelations,
@@ -38,6 +39,7 @@ import type { Campaign, Lead, Account } from "@prisma/client";
 const leadUpsert = prisma.lead.upsert as ReturnType<typeof vi.fn>;
 const campaignUpdate = prisma.campaign.update as ReturnType<typeof vi.fn>;
 const accountFind = prisma.account.findUnique as ReturnType<typeof vi.fn>;
+const notifyFn = notify as ReturnType<typeof vi.fn>;
 
 function campaign(overrides: Partial<Campaign> = {}): Campaign {
   return {
@@ -235,5 +237,29 @@ describe("sendSweepMessage", () => {
         data: expect.objectContaining({ status: "LIMIT_HIT" }),
       }),
     );
+  });
+
+  it("não notifica BROADCAST_LIMIT_HIT em SWEEP legado", async () => {
+    (unipile.sendDirectMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new UnipileError(422, "errors/limit_exceeded", "limit"),
+    );
+
+    await expect(sendSweepMessage(campaign({ mode: "SWEEP", searchUrl: "SWEEP" }), lead())).rejects.toThrow(
+      "limit",
+    );
+
+    expect(notifyFn).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_LIMIT_HIT" }));
+  });
+
+  it("notifica BROADCAST_LIMIT_HIT em DISPARO", async () => {
+    (unipile.sendDirectMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new UnipileError(422, "errors/limit_exceeded", "limit"),
+    );
+
+    await expect(
+      sendSweepMessage(campaign({ mode: "DISPARO", searchUrl: "DISPARO", inviteMessage: "Olá {nome}!" }), lead()),
+    ).rejects.toThrow("limit");
+
+    expect(notifyFn).toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_LIMIT_HIT" }));
   });
 });

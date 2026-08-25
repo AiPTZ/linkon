@@ -36,7 +36,8 @@ import { prisma } from "./lib/prisma";
 import { refreshCounters, withinLimits } from "./services/invite.service";
 import { sweepQueue } from "./services/queue.service";
 import { notify } from "./services/notification.service";
-import { processBroadcastCampaign } from "./scheduler";
+import { hasFlow } from "./services/flow.service";
+import { processBroadcastCampaign, processFlowCampaign } from "./scheduler";
 import type { Campaign, Account, Lead } from "@prisma/client";
 
 const leadFindFirst = prisma.lead.findFirst as ReturnType<typeof vi.fn>;
@@ -47,6 +48,7 @@ const refresh = refreshCounters as ReturnType<typeof vi.fn>;
 const within = withinLimits as ReturnType<typeof vi.fn>;
 const sweepAdd = sweepQueue.add as ReturnType<typeof vi.fn>;
 const notifyFn = notify as ReturnType<typeof vi.fn>;
+const flowHas = hasFlow as ReturnType<typeof vi.fn>;
 
 function campaign(overrides: Partial<Campaign> = {}): Campaign {
   return {
@@ -128,5 +130,42 @@ describe("processBroadcastCampaign", () => {
       expect.objectContaining({ data: { status: "COMPLETED" } }),
     );
     expect(notifyFn).toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_COMPLETED" }));
+  });
+
+  it("completa SWEEP legado sem notificar BROADCAST_COMPLETED", async () => {
+    leadFindFirst.mockResolvedValue(null);
+    leadCount.mockResolvedValue(0);
+    await processBroadcastCampaign(campaign({ mode: "SWEEP", searchUrl: "SWEEP" }));
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "COMPLETED" } }),
+    );
+    expect(notifyFn).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_COMPLETED" }));
+  });
+
+  it("pausa SWEEP no limite semanal sem notificar BROADCAST_LIMIT_HIT", async () => {
+    await processBroadcastCampaign(campaign({ mode: "SWEEP", searchUrl: "SWEEP", invitesSentWeek: 999 }));
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "LIMIT_HIT" } }),
+    );
+    expect(notifyFn).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_LIMIT_HIT" }));
+  });
+});
+
+describe("processFlowCampaign", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    refresh.mockImplementation((c: Campaign) => Promise.resolve(c));
+    accountFind.mockResolvedValue(account);
+  });
+
+  it("completa SEARCH com fluxo sem notificar BROADCAST_COMPLETED", async () => {
+    flowHas.mockReturnValue(true);
+    leadFindFirst.mockResolvedValue(null);
+    leadCount.mockResolvedValue(0);
+    await processFlowCampaign(campaign({ mode: "SEARCH", searchUrl: "SEARCH", flow: "[]" }));
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "COMPLETED" } }),
+    );
+    expect(notifyFn).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_COMPLETED" }));
   });
 });

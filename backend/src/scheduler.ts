@@ -45,7 +45,7 @@ async function processCampaigns(): Promise<void> {
   }
 }
 
-async function processFlowCampaign(campaign: Campaign): Promise<void> {
+export async function processFlowCampaign(campaign: Campaign): Promise<void> {
   const fresh = await refreshCounters(campaign);
   const now = new Date();
   const selectedFilter = fresh.mode === "DISPARO" ? { selected: true } : {};
@@ -58,13 +58,15 @@ async function processFlowCampaign(campaign: Campaign): Promise<void> {
       message: `Limite semanal de ${fresh.weeklyLimit} ações atingido. Campanha pausada.`,
       campaignId: fresh.id,
     });
-    await notify({
-      accountId: fresh.accountId,
-      campaignId: fresh.id,
-      type: "BROADCAST_LIMIT_HIT",
-      level: "WARN",
-      message: `Campanha "${fresh.name}" pausada: limite semanal de ${fresh.weeklyLimit} ações atingido.`,
-    });
+    if (fresh.mode === "DISPARO") {
+      await notify({
+        accountId: fresh.accountId,
+        campaignId: fresh.id,
+        type: "BROADCAST_LIMIT_HIT",
+        level: "WARN",
+        message: `Campanha "${fresh.name}" pausada: limite semanal de ${fresh.weeklyLimit} ações atingido.`,
+      });
+    }
     return;
   }
   if (fresh.invitesSentToday >= fresh.dailyLimit) {
@@ -116,13 +118,15 @@ async function processFlowCampaign(campaign: Campaign): Promise<void> {
     if (active === 0) {
       await prisma.campaign.update({ where: { id: fresh.id }, data: { status: "COMPLETED" } });
       logger.info(`Campaign ${fresh.id} completed (flow)`);
-      await notify({
-        accountId: fresh.accountId,
-        campaignId: fresh.id,
-        type: "BROADCAST_COMPLETED",
-        level: "INFO",
-        message: `Disparo "${fresh.name}" concluído com sucesso.`,
-      });
+      if (fresh.mode === "DISPARO") {
+        await notify({
+          accountId: fresh.accountId,
+          campaignId: fresh.id,
+          type: "BROADCAST_COMPLETED",
+          level: "INFO",
+          message: `Disparo "${fresh.name}" concluído com sucesso.`,
+        });
+      }
     }
     return;
   }
@@ -206,13 +210,15 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
       message: `Limite semanal de ${fresh.weeklyLimit} mensagens atingido. Disparo pausado.`,
       campaignId: fresh.id,
     });
-    await notify({
-      accountId: fresh.accountId,
-      campaignId: fresh.id,
-      type: "BROADCAST_LIMIT_HIT",
-      level: "WARN",
-      message: `Disparo "${fresh.name}" pausado: limite semanal de ${fresh.weeklyLimit} mensagens atingido.`,
-    });
+    if (campaign.mode === "DISPARO") {
+      await notify({
+        accountId: fresh.accountId,
+        campaignId: fresh.id,
+        type: "BROADCAST_LIMIT_HIT",
+        level: "WARN",
+        message: `Disparo "${fresh.name}" pausado: limite semanal de ${fresh.weeklyLimit} mensagens atingido.`,
+      });
+    }
     return;
   }
   if (fresh.invitesSentToday >= fresh.dailyLimit) {
@@ -261,13 +267,15 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
         message: `Disparo "${fresh.name}" concluído`,
         campaignId: fresh.id,
       });
-      await notify({
-        accountId: fresh.accountId,
-        campaignId: fresh.id,
-        type: "BROADCAST_COMPLETED",
-        level: "INFO",
-        message: `Disparo "${fresh.name}" concluído com sucesso.`,
-      });
+      if (campaign.mode === "DISPARO") {
+        await notify({
+          accountId: fresh.accountId,
+          campaignId: fresh.id,
+          type: "BROADCAST_COMPLETED",
+          level: "INFO",
+          message: `Disparo "${fresh.name}" concluído com sucesso.`,
+        });
+      }
       logger.info(`Campaign ${fresh.id} completed (broadcast)`);
     }
     return;

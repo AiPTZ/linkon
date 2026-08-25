@@ -105,6 +105,22 @@ describe("startCampaign", () => {
     );
     expect(searchAdd).toHaveBeenCalledWith("search", { campaignId: "C1" });
   });
+
+  it("é no-op ao iniciar DISPARO já em RUNNING", async () => {
+    campaignFind.mockResolvedValue(campaign({ mode: "DISPARO", searchUrl: "DISPARO", status: "RUNNING" }));
+    await startCampaign("C1");
+    expect(campaignUpdate).not.toHaveBeenCalled();
+    expect(notifyFn).not.toHaveBeenCalled();
+    expect(searchAdd).not.toHaveBeenCalled();
+  });
+
+  it("é no-op ao iniciar SEARCH já em IMPORTING", async () => {
+    campaignFind.mockResolvedValue(campaign({ status: "IMPORTING" }));
+    await startCampaign("C1");
+    expect(campaignUpdate).not.toHaveBeenCalled();
+    expect(notifyFn).not.toHaveBeenCalled();
+    expect(searchAdd).not.toHaveBeenCalled();
+  });
 });
 
 describe("resumeCampaign", () => {
@@ -114,11 +130,21 @@ describe("resumeCampaign", () => {
 
   it("retoma DISPARO direto, sem reimportar", async () => {
     campaignFind.mockResolvedValue(campaign({ mode: "DISPARO", searchUrl: "DISPARO" }));
+    leadCount.mockResolvedValue(5);
     await resumeCampaign("C1");
     expect(campaignUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "RUNNING" } }),
     );
     expect(searchAdd).not.toHaveBeenCalled();
+    expect(notifyFn).toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_STARTED" }));
+  });
+
+  it("recusa retomar DISPARO sem contatos selecionados", async () => {
+    campaignFind.mockResolvedValue(campaign({ mode: "DISPARO", searchUrl: "DISPARO" }));
+    leadCount.mockResolvedValue(0);
+    await expect(resumeCampaign("C1")).rejects.toThrow(ApiError);
+    expect(campaignUpdate).not.toHaveBeenCalled();
+    expect(notifyFn).not.toHaveBeenCalled();
   });
 
   it("reimporta SEARCH ao retomar", async () => {
