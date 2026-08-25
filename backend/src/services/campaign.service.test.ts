@@ -4,17 +4,22 @@ vi.mock("../lib/prisma", () => ({
   prisma: {
     campaign: { findUnique: vi.fn(), update: vi.fn() },
     account: { findUnique: vi.fn() },
-    lead: { count: vi.fn() },
+    lead: { count: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   },
 }));
 
-vi.mock("./queue.service", () => ({ searchQueue: { add: vi.fn() } }));
+vi.mock("./queue.service", () => ({
+  searchQueue: { add: vi.fn() },
+  sweepQueue: { add: vi.fn() },
+}));
 vi.mock("./log.service", () => ({ createLog: vi.fn() }));
 vi.mock("./notification.service", () => ({ notify: vi.fn() }));
+vi.mock("./flow.service", () => ({ hasFlow: vi.fn(() => false) }));
 
 import { prisma } from "../lib/prisma";
-import { searchQueue } from "./queue.service";
+import { searchQueue, sweepQueue } from "./queue.service";
 import { notify } from "./notification.service";
+import { hasFlow } from "./flow.service";
 import { startCampaign, resumeCampaign } from "./campaign.service";
 import { ApiError } from "../utils/errors";
 import type { Campaign, Account } from "@prisma/client";
@@ -23,7 +28,10 @@ const campaignFind = prisma.campaign.findUnique as ReturnType<typeof vi.fn>;
 const campaignUpdate = prisma.campaign.update as ReturnType<typeof vi.fn>;
 const accountFind = prisma.account.findUnique as ReturnType<typeof vi.fn>;
 const leadCount = prisma.lead.count as ReturnType<typeof vi.fn>;
+const leadFindFirst = prisma.lead.findFirst as ReturnType<typeof vi.fn>;
 const searchAdd = searchQueue.add as ReturnType<typeof vi.fn>;
+const sweepAdd = sweepQueue.add as ReturnType<typeof vi.fn>;
+const flowHas = hasFlow as ReturnType<typeof vi.fn>;
 const notifyFn = notify as ReturnType<typeof vi.fn>;
 
 function campaign(overrides: Partial<Campaign> = {}): Campaign {
@@ -88,6 +96,29 @@ describe("startCampaign", () => {
     );
     expect(searchAdd).not.toHaveBeenCalled();
     expect(notifyFn).toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_STARTED" }));
+  });
+
+  it("enfileira o primeiro disparo imediatamente ao iniciar DISPARO sem fluxo", async () => {
+    campaignFind.mockResolvedValue(campaign({ mode: "DISPARO", searchUrl: "DISPARO" }));
+    leadCount.mockResolvedValue(5);
+    leadFindFirst.mockResolvedValue({ id: "L1", campaignId: "C1" });
+    await startCampaign("C1");
+    expect(sweepAdd).toHaveBeenCalledWith(
+      "sweep",
+      { leadId: "L1", campaignId: "C1" },
+      expect.objectContaining({ delay: 0 }),
+    );
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "L1" }, data: expect.objectContaining({ nextInviteAt: expect.any(Date) }) }),
+    );
+  });
+
+  it("não enfileira disparo imediato quando o DISPARO tem fluxo", async () => {
+    flowHas.mockReturnValue(true);
+    campaignFind.mockResolvedValue(campaign({ mode: "DISPARO", searchUrl: "DISPARO", flow: "[]" }));
+    leadCount.mockResolvedValue(5);
+    await startCampaign("C1");
+    expect(sweepAdd).not.toHaveBeenCalled();
   });
 
   it("recusa DISPARO sem contatos selecionados", async () => {

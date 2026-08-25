@@ -1,8 +1,9 @@
 import { prisma } from "../lib/prisma";
-import { searchQueue } from "./queue.service";
+import { searchQueue, sweepQueue } from "./queue.service";
 import { createLog } from "./log.service";
 import { notify } from "./notification.service";
 import { ApiError } from "../utils/errors";
+import { hasFlow } from "./flow.service";
 
 export async function startCampaign(id: string): Promise<void> {
   const campaign = await prisma.campaign.findUnique({ where: { id } });
@@ -34,6 +35,35 @@ export async function startCampaign(id: string): Promise<void> {
       message: `Disparo "${campaign.name}" iniciado para ${selected} contatos.`,
       payload: { selected },
     });
+    if (!hasFlow(campaign.flow)) {
+      const due = await prisma.lead.findFirst({
+        where: {
+          campaignId: id,
+          selected: true,
+          status: "PENDING",
+          currentBlockId: null,
+          OR: [{ nextInviteAt: null }, { nextInviteAt: { lte: new Date() } }],
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      if (due) {
+        await prisma.lead.update({
+          where: { id: due.id },
+          data: { nextInviteAt: new Date() },
+        });
+        await sweepQueue.add(
+          "sweep",
+          { leadId: due.id, campaignId: id },
+          {
+            delay: 0,
+            attempts: 5,
+            backoff: { type: "exponential", delay: 60_000 },
+            removeOnComplete: 500,
+            removeOnFail: 1000,
+          },
+        );
+      }
+    }
     return;
   }
 

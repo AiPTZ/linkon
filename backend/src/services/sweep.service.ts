@@ -123,7 +123,7 @@ export async function sendSweepMessage(campaign: Campaign, lead: Lead): Promise<
       campaignId: campaign.id,
       leadId: lead.id,
       accountId: account.id,
-      payload: { text, conversationId: res.conversation_id },
+      payload: { text, chatId: res.chat_id },
     });
   } catch (err) {
     if (err instanceof UnipileError && err.isLimitError()) {

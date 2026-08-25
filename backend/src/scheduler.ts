@@ -283,7 +283,22 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
 
   if (!withinLimits(fresh)) return;
 
-  const delay = randomDelayMs(fresh.minDelayMin, fresh.maxDelayMin);
+  let delay: number;
+  if (fresh.mode === "DISPARO") {
+    const lastSent = await prisma.lead.findFirst({
+      where: { campaignId: fresh.id, lastMessageAt: { not: null } },
+      orderBy: { lastMessageAt: "desc" },
+      select: { lastMessageAt: true },
+    });
+    if (!lastSent?.lastMessageAt) {
+      delay = 0;
+    } else {
+      const intervalMs = fresh.maxDelayMin * 60_000;
+      delay = Math.max(0, lastSent.lastMessageAt.getTime() + intervalMs - Date.now());
+    }
+  } else {
+    delay = randomDelayMs(fresh.minDelayMin, fresh.maxDelayMin);
+  }
   await prisma.lead.update({
     where: { id: due.id },
     data: { nextInviteAt: new Date(Date.now() + delay) },

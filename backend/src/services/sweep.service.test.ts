@@ -196,7 +196,7 @@ describe("sendSweepMessage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     accountFind.mockResolvedValue(account);
-    (unipile.sendDirectMessage as ReturnType<typeof vi.fn>).mockResolvedValue({ conversation_id: "conv1" });
+    (unipile.sendDirectMessage as ReturnType<typeof vi.fn>).mockResolvedValue({ chat_id: "chat1" });
   });
 
   it("sends a DM and completes the lead", async () => {

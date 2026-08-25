@@ -114,6 +114,26 @@ describe("processBroadcastCampaign", () => {
     expect(sweepAdd).toHaveBeenCalledWith("sweep", { leadId: "L1", campaignId: "C1" }, expect.anything());
   });
 
+  it("agenda o primeiro disparo do DISPARO imediatamente (delay 0)", async () => {
+    leadFindFirst.mockResolvedValueOnce({ id: "L1", campaignId: "C1" } as Lead).mockResolvedValueOnce(null);
+    await processBroadcastCampaign(campaign());
+    expect(sweepAdd).toHaveBeenCalledWith(
+      "sweep",
+      { leadId: "L1", campaignId: "C1" },
+      expect.objectContaining({ delay: 0 }),
+    );
+  });
+
+  it("espaça disparos subsequentes do DISPARO em maxDelayMin após o último envio", async () => {
+    leadFindFirst
+      .mockResolvedValueOnce({ id: "L1", campaignId: "C1" } as Lead)
+      .mockResolvedValueOnce({ lastMessageAt: new Date(Date.now() - 10 * 60_000) });
+    await processBroadcastCampaign(campaign());
+    const options = sweepAdd.mock.calls[0][2] as { delay: number };
+    expect(options.delay).toBeGreaterThan(290_000);
+    expect(options.delay).toBeLessThan(310_000);
+  });
+
   it("não filtra por selected em SWEEP legado", async () => {
     leadFindFirst.mockResolvedValue({ id: "L1", campaignId: "C1" } as Lead);
     await processBroadcastCampaign(campaign({ mode: "SWEEP", searchUrl: "SWEEP" }));
