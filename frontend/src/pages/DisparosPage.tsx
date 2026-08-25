@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCheck, Plus, Radar, Send, Users, XCircle } from "lucide-react";
+import { CheckCheck, Plus, Radar, Send, Trash2, Users, XCircle } from "lucide-react";
 import { api } from "../lib/api";
 import type { Campaign } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
@@ -25,6 +25,19 @@ export function DisparosPage() {
     const t = setInterval(load, REFRESH_MS);
     return () => clearInterval(t);
   }, [toast]);
+
+  async function onDelete(c: Campaign) {
+    if (!window.confirm(`Excluir o disparo "${c.name}"? Leads, logs e notificações serão removidos.`)) {
+      return;
+    }
+    try {
+      await api.delete(`/campaigns/${c.id}`);
+      toast("success", "Disparo excluído");
+      setCampaigns((prev) => prev?.filter((x) => x.id !== c.id) ?? null);
+    } catch (err) {
+      toastFromError(toast, err);
+    }
+  }
 
   if (!campaigns) return <PageLoader />;
 
@@ -71,17 +84,17 @@ export function DisparosPage() {
           {campaigns.map((c) => {
             const rate = replyRate(c);
             return (
-              <Link
-                key={c.id}
-                to={`/disparos/${c.id}`}
-                className="card group p-5 transition-all duration-200 hover:border-gold-500/40 hover:shadow-gold"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-serif text-lg font-medium leading-snug text-cream group-hover:text-gold-400">
-                    {c.name}
-                  </h2>
-                  <StatusBadge status={c.status} kind="campaign" mode={c.mode} />
-                </div>
+              <div key={c.id} className="relative">
+                <Link
+                  to={`/disparos/${c.id}`}
+                  className="card group p-5 transition-all duration-200 hover:border-gold-500/40 hover:shadow-gold"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h2 className="font-serif text-lg font-medium leading-snug text-cream group-hover:text-gold-400">
+                      {c.name}
+                    </h2>
+                    <StatusBadge status={c.status} kind="campaign" mode={c.mode} />
+                  </div>
                 <div className="mt-1 text-xs text-cream/40">
                   Conta: {shortName(c.account.username, "—")}
                 </div>
@@ -129,7 +142,17 @@ export function DisparosPage() {
                 <div className="mt-3 text-[11px] text-cream/30">
                   Criado em {formatDateTime(c.createdAt)}
                 </div>
-              </Link>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => onDelete(c)}
+                  className="absolute bottom-3 right-3 rounded-lg border border-ink-400 bg-ink-800/80 p-1.5 text-cream/40 transition-colors hover:border-red-500/40 hover:text-red-400"
+                  aria-label={`Excluir ${c.name}`}
+                  title="Excluir disparo"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             );
           })}
         </div>

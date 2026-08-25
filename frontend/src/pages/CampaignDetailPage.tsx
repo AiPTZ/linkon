@@ -15,6 +15,7 @@ import {
   ScrollText,
   Send,
   Timer,
+  Trash2,
   Users,
   Workflow,
   XCircle,
@@ -134,6 +135,23 @@ export function CampaignDetailPage() {
     [id, loadCampaign, toast],
   );
 
+  async function onDelete() {
+    if (!campaign) return;
+    if (!window.confirm(`Excluir a campanha "${campaign.name}"? Leads, logs e notificações serão removidos.`)) {
+      return;
+    }
+    setBusy("delete");
+    try {
+      await api.delete(`/campaigns/${id}`);
+      toast("success", "Campanha excluída");
+      navigate(isBroadcast ? "/disparos" : "/campanhas");
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const stats = useMemo(() => {
     const s = campaign?.stats ?? {};
     return {
@@ -221,6 +239,16 @@ export function CampaignDetailPage() {
               Retomar
             </button>
           )}
+          <button
+            type="button"
+            className="btn btn-secondary !border-red-500/40 !text-red-400 hover:!border-red-400 hover:!text-red-300"
+            disabled={busy !== null}
+            onClick={onDelete}
+            title="Excluir campanha"
+          >
+            {busy === "delete" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            Excluir
+          </button>
         </div>
       </div>
 

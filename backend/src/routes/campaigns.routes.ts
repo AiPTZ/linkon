@@ -281,6 +281,21 @@ campaignsRouter.post(
   }),
 );
 
+campaignsRouter.delete(
+  "/:id",
+  ah(async (req, res) => {
+    const existing = await prisma.campaign.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, "Campanha não encontrada");
+
+    await prisma.$transaction([
+      prisma.logEvent.deleteMany({ where: { campaignId: req.params.id } }),
+      prisma.notification.deleteMany({ where: { campaignId: req.params.id } }),
+      prisma.campaign.delete({ where: { id: req.params.id } }),
+    ]);
+    res.json({ ok: true });
+  }),
+);
+
 campaignsRouter.get(
   "/:id/leads/selection",
   ah(async (req, res) => {
