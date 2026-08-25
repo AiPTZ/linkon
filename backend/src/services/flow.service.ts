@@ -239,14 +239,16 @@ async function handleDmError(
   if (!(err instanceof UnipileError)) return;
   if (err.isLimitError()) {
     await prisma.campaign.update({ where: { id: campaign.id }, data: { status: "LIMIT_HIT" } });
-    await notify({
-      accountId: campaign.accountId,
-      campaignId: campaign.id,
-      type: "BROADCAST_LIMIT_HIT",
-      level: "WARN",
-      message: `Limite do LinkedIn atingido ao enviar mensagem (${err.errorType}). Disparo pausado.`,
-      payload: { error: err.message },
-    });
+    if (campaign.mode === "DISPARO") {
+      await notify({
+        accountId: campaign.accountId,
+        campaignId: campaign.id,
+        type: "BROADCAST_LIMIT_HIT",
+        level: "WARN",
+        message: `Limite do LinkedIn atingido ao enviar mensagem (${err.errorType}). Disparo pausado.`,
+        payload: { error: err.message },
+      });
+    }
     await createLog({
       type: "RATE_LIMITED",
       level: "WARN",

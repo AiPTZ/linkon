@@ -28,11 +28,13 @@ vi.mock("../utils/time", async (importOriginal) => {
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
 import { processFlowStep, validateFlow, parseFlow, hasFlow } from "./flow.service";
+import { notify } from "./notification.service";
 import { UnipileError } from "../utils/errors";
 import type { Campaign, Lead, Account } from "@prisma/client";
 
 const leadUpdate = prisma.lead.update as ReturnType<typeof vi.fn>;
 const campaignUpdate = prisma.campaign.update as ReturnType<typeof vi.fn>;
+const notifyFn = notify as ReturnType<typeof vi.fn>;
 
 function makeFlow(flow: { nodes: unknown[]; edges: unknown[] }): string {
   return JSON.stringify(flow);
@@ -545,5 +547,39 @@ describe("processFlowStep", () => {
 
     const updates = leadUpdate.mock.calls.map((c) => (c[0] as { data: Record<string, unknown> }).data);
     expect(updates.some((d) => d.status === "COMPLETED")).toBe(true);
+  });
+
+  it("disparo: notifies BROADCAST_LIMIT_HIT on DM limit error, search does not", async () => {
+    (unipile.sendDirectMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new UnipileError(422, "errors/limit_exceeded", "limit"),
+    );
+
+    const disparoCampaign = baseCampaign(acceptFlow);
+    disparoCampaign.mode = "DISPARO";
+    disparoCampaign.searchUrl = "DISPARO";
+    const disparoLead = baseLead({ status: "ACCEPTED", currentBlockId: "oa" });
+    await processFlowStep(disparoCampaign, account, disparoLead, parseFlow(acceptFlow));
+
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "C1" },
+        data: expect.objectContaining({ status: "LIMIT_HIT" }),
+      }),
+    );
+    expect(notifyFn).toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_LIMIT_HIT" }));
+
+    vi.clearAllMocks();
+
+    const searchCampaign = baseCampaign(acceptFlow);
+    const searchLead = baseLead({ status: "ACCEPTED", currentBlockId: "oa" });
+    await processFlowStep(searchCampaign, account, searchLead, parseFlow(acceptFlow));
+
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "C1" },
+        data: expect.objectContaining({ status: "LIMIT_HIT" }),
+      }),
+    );
+    expect(notifyFn).not.toHaveBeenCalled();
   });
 });
