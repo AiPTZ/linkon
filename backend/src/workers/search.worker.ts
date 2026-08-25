@@ -25,7 +25,7 @@ const worker = new Worker(
         message:
           campaign.mode === "SWEEP" || campaign.mode === "DISPARO"
             ? `Conexões da rede importadas: ${imported}`
-            : `Importados ${imported} leads (total na busca: ${total})`,
+            : `Importados ${imported} leads da busca`,
         campaignId,
         payload: { imported, total },
       });

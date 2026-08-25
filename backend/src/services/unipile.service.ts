@@ -203,12 +203,17 @@ export class UnipileService {
   searchByUrl(
     accountId: string,
     url: string,
-    cursor?: string,
+    page = 1,
     limit = 25,
   ): Promise<SearchPage> {
+    let searchUrl = url;
+    if (page > 1) {
+      const u = new URL(url);
+      u.searchParams.set("page", String(page));
+      searchUrl = u.toString();
+    }
     const params: Record<string, string> = { account_id: accountId, limit: String(limit) };
-    if (cursor) params.cursor = cursor;
-    return this.request("/api/v1/linkedin/search", { method: "POST", params, body: { url } });
+    return this.request("/api/v1/linkedin/search", { method: "POST", params, body: { url: searchUrl } });
   }
 
   getProfile(accountId: string, identifier: string): Promise<UserProfile> {
