@@ -8,6 +8,7 @@ import { createLog } from "../services/log.service";
 import {
   approveUser,
   blockUser,
+  createUser,
   listUsers,
   resetUserPassword,
   unblockUser,
@@ -140,6 +141,22 @@ adminRouter.post(
       accountId: account.id,
     });
     res.json({ ok: true });
+  }),
+);
+
+const createUserSchema = z.object({
+  name: z.string().min(1).max(120),
+  username: z.string().min(3).max(40),
+  password: z.string().min(6).max(100),
+  whatsapp: z.string().max(25).optional(),
+});
+
+adminRouter.post(
+  "/users",
+  ah(async (req, res) => {
+    const body = createUserSchema.parse(req.body);
+    const user = await createUser(body);
+    res.status(201).json({ user });
   }),
 );
 

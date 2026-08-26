@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   Activity,
   Bot,
@@ -79,6 +79,13 @@ export function AdminPage() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [globalData, setGlobalData] = useState<{ campaigns: number; extractions: number } | null>(null);
 
+  const [showNewUser, setShowNewUser] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newWhatsapp, setNewWhatsapp] = useState("");
+  const [creating, setCreating] = useState(false);
+
   const loadOverview = useCallback(() => {
     api.get<Overview>("/admin/overview").then(setOverview).catch((e) => toastFromError(toast, e));
   }, [toast]);
@@ -155,6 +162,30 @@ export function AdminPage() {
       toast("success", "Senha redefinida");
     } catch (err) {
       toastFromError(toast, err);
+    }
+  }
+
+  async function onCreateUser(e: FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      await api.post("/admin/users", {
+        name: newName,
+        username: newUsername,
+        password: newPassword,
+        whatsapp: newWhatsapp || undefined,
+      });
+      toast("success", "Usuário criado com acesso ativo");
+      setNewName("");
+      setNewUsername("");
+      setNewPassword("");
+      setNewWhatsapp("");
+      setShowNewUser(false);
+      loadUsers();
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -296,15 +327,91 @@ export function AdminPage() {
       )}
 
       {tab === "users" && (
-        <div className="card overflow-hidden">
-          {!users ? (
-            <PageLoader />
-          ) : users.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-              <UserPlus className="h-8 w-8 text-cream/30" />
-              <p className="text-sm text-cream/50">Nenhum usuário cadastrado.</p>
-            </div>
-          ) : (
+        <div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-serif text-xl text-cream">Usuários</h2>
+            <button
+              type="button"
+              className="btn btn-secondary !px-3 !py-1.5 text-xs"
+              onClick={() => setShowNewUser((v) => !v)}
+            >
+              {showNewUser ? <X className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
+              {showNewUser ? "Cancelar" : "Novo usuário"}
+            </button>
+          </div>
+
+          {showNewUser && (
+            <form onSubmit={onCreateUser} className="card mb-4 space-y-4 p-5">
+              <h3 className="font-serif text-lg text-gold-400">Criar conta de usuário</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="newName" className="label">Nome *</label>
+                  <input
+                    id="newName"
+                    className="input"
+                    required
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="newUsername" className="label">Usuário (login) *</label>
+                  <input
+                    id="newUsername"
+                    className="input"
+                    required
+                    minLength={3}
+                    maxLength={40}
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="newPassword" className="label">Senha (mín. 6) *</label>
+                  <input
+                    id="newPassword"
+                    className="input"
+                    type="password"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="newWhatsapp" className="label">WhatsApp (opcional)</label>
+                  <input
+                    id="newWhatsapp"
+                    className="input"
+                    maxLength={25}
+                    placeholder="Ex: 5511999999999"
+                    value={newWhatsapp}
+                    onChange={(e) => setNewWhatsapp(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button type="submit" className="btn btn-primary" disabled={creating}>
+                  {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                  Criar usuário
+                </button>
+              </div>
+              <p className="text-xs text-cream/40">
+                O usuário será criado com acesso ativo (ATIVO) e papel de usuário comum.
+              </p>
+            </form>
+          )}
+
+          <div className="card overflow-hidden">
+            {!users ? (
+              <PageLoader />
+            ) : users.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+                <UserPlus className="h-8 w-8 text-cream/30" />
+                <p className="text-sm text-cream/50">Nenhum usuário cadastrado.</p>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -393,6 +500,7 @@ export function AdminPage() {
               </table>
             </div>
           )}
+          </div>
         </div>
       )}
 

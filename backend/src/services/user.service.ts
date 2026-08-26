@@ -73,6 +73,28 @@ export async function registerUser(input: {
   return toPublic(user);
 }
 
+export async function createUser(input: {
+  name: string;
+  username: string;
+  password: string;
+  whatsapp?: string;
+}): Promise<PublicUser> {
+  const existing = await prisma.user.findUnique({ where: { username: input.username } });
+  if (existing) throw new ApiError(409, "Este usuário já está cadastrado.");
+  const passwordHash = await bcrypt.hash(input.password, 12);
+  const user = await prisma.user.create({
+    data: {
+      name: input.name,
+      username: input.username,
+      passwordHash,
+      whatsapp: input.whatsapp || null,
+      role: "USER",
+      status: "ACTIVE",
+    },
+  });
+  return toPublic(user);
+}
+
 export async function changePassword(
   userId: string,
   currentPassword: string,

@@ -14,7 +14,7 @@ vi.mock("../lib/prisma", () => ({
 }));
 
 import { prisma } from "../lib/prisma";
-import { loginUser, registerUser, changePassword, approveUser, blockUser } from "./user.service";
+import { loginUser, registerUser, createUser, changePassword, approveUser, blockUser } from "./user.service";
 import { ApiError } from "../utils/errors";
 
 const userFind = prisma.user.findUnique as ReturnType<typeof vi.fn>;
@@ -60,6 +60,24 @@ describe("registerUser", () => {
   it("rejeita username duplicado", async () => {
     userFind.mockResolvedValue(baseUser);
     await expect(registerUser({ name: "F", username: "fulano", password: "senha123" })).rejects.toThrow(ApiError);
+  });
+});
+
+describe("createUser", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("cria usuário ATIVO pelo admin", async () => {
+    userFind.mockResolvedValue(null);
+    userCreate.mockResolvedValue({ ...baseUser, status: "ACTIVE" });
+    const u = await createUser({ name: "Novo", username: "novo", password: "senha123", whatsapp: "5511999999999" });
+    expect(u.status).toBe("ACTIVE");
+    expect(u.role).toBe("USER");
+    expect(userCreate.mock.calls[0][0].data.status).toBe("ACTIVE");
+  });
+
+  it("rejeita username duplicado", async () => {
+    userFind.mockResolvedValue(baseUser);
+    await expect(createUser({ name: "Novo", username: "fulano", password: "senha123" })).rejects.toThrow(ApiError);
   });
 });
 
