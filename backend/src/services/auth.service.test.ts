@@ -2,29 +2,32 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../lib/prisma", () => ({
   prisma: {
-    account: { findUnique: vi.fn(), update: vi.fn() },
+    account: { findUnique: vi.fn(), update: vi.fn(), upsert: vi.fn(), count: vi.fn() },
     campaign: { updateMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
 
 vi.mock("./unipile.service", () => ({
-  unipile: { deleteAccount: vi.fn() },
+  unipile: { deleteAccount: vi.fn(), listAccounts: vi.fn(), createHostedAuthLink: vi.fn() },
 }));
 
 vi.mock("./log.service", () => ({ createLog: vi.fn() }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { disconnectAccount } from "./auth.service";
+import { disconnectAccount, confirmHosted } from "./auth.service";
 import { ApiError } from "../utils/errors";
 import type { Account } from "@prisma/client";
 
 const accountFind = prisma.account.findUnique as ReturnType<typeof vi.fn>;
 const accountUpdate = prisma.account.update as ReturnType<typeof vi.fn>;
+const accountUpsert = prisma.account.upsert as ReturnType<typeof vi.fn>;
+const accountCount = prisma.account.count as ReturnType<typeof vi.fn>;
 const campaignUpdateMany = prisma.campaign.updateMany as ReturnType<typeof vi.fn>;
 const transaction = prisma.$transaction as ReturnType<typeof vi.fn>;
 const deleteAccount = unipile.deleteAccount as ReturnType<typeof vi.fn>;
+const listAccounts = unipile.listAccounts as ReturnType<typeof vi.fn>;
 
 const account: Account = {
   id: "A1",
@@ -76,5 +79,37 @@ describe("disconnectAccount", () => {
     await expect(disconnectAccount("A1")).rejects.toThrow("Unipile offline");
     expect(accountUpdate).not.toHaveBeenCalled();
     expect(campaignUpdateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("confirmHosted", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    accountUpsert.mockResolvedValue({ id: "A1" });
+    accountCount.mockResolvedValue(0);
+  });
+
+  it("cria conta PENDING_LINKEDIN para usuário", async () => {
+    listAccounts.mockResolvedValue({ items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }] });
+    const res = await confirmHosted("U1", { pending: true });
+    expect(res.accounts).toBe(1);
+    const create = accountUpsert.mock.calls[0][0] as { create: { status: string; userId: string } };
+    expect(create.create.status).toBe("PENDING_LINKEDIN");
+    expect(create.create.userId).toBe("U1");
+  });
+
+  it("não cria segunda conta para usuário que já possui uma", async () => {
+    accountCount.mockResolvedValue(1);
+    listAccounts.mockResolvedValue({ items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }] });
+    const res = await confirmHosted("U1", { pending: true });
+    expect(res.accounts).toBe(0);
+    expect(accountUpsert).not.toHaveBeenCalled();
+  });
+
+  it("ignora contas sem marcador do usuário", async () => {
+    listAccounts.mockResolvedValue({ items: [{ id: "UA2", name: "Outro nome" }] });
+    const res = await confirmHosted("U1", { pending: true });
+    expect(res.accounts).toBe(0);
+    expect(accountUpsert).not.toHaveBeenCalled();
   });
 });

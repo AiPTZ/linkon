@@ -16,26 +16,15 @@ export async function connectNative(
   username: string,
   password: string,
   country?: string,
+  userId?: string | null,
 ): Promise<NativeAuthResult> {
   const result = await unipile.connectLinkedinNative(username, password, country);
 
   if (result.checkpoint && result.account_id) {
     const local = await prisma.account.upsert({
       where: { unipileAccountId: result.account_id },
-      update: {
-        status: "CHECKPOINT",
-        checkpointType: result.checkpoint.type,
-        username,
-        credentialsEnc: encrypt(JSON.stringify({ username, password })),
-      },
-      create: {
-        unipileAccountId: result.account_id,
-        username,
-        authMethod: "NATIVE",
-        status: "CHECKPOINT",
-        checkpointType: result.checkpoint.type,
-        credentialsEnc: encrypt(JSON.stringify({ username, password })),
-      },
+      update: { status: "CHECKPOINT", checkpointType: result.checkpoint.type, username, userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
+      create: { unipileAccountId: result.account_id, username, authMethod: "NATIVE", status: "CHECKPOINT", checkpointType: result.checkpoint.type, userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
     });
     return { checkpoint: result.checkpoint.type, localAccountId: local.id };
   }
@@ -43,20 +32,8 @@ export async function connectNative(
   const account = result as unknown as UnipileAccount;
   const local = await prisma.account.upsert({
     where: { unipileAccountId: account.id },
-    update: {
-      status: "OK",
-      checkpointType: null,
-      username,
-      authMethod: "NATIVE",
-      credentialsEnc: encrypt(JSON.stringify({ username, password })),
-    },
-    create: {
-      unipileAccountId: account.id,
-      username,
-      authMethod: "NATIVE",
-      status: "OK",
-      credentialsEnc: encrypt(JSON.stringify({ username, password })),
-    },
+    update: { status: "OK", checkpointType: null, username, authMethod: "NATIVE", userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
+    create: { unipileAccountId: account.id, username, authMethod: "NATIVE", status: "OK", userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
   });
   return { account, localAccountId: local.id };
 }
@@ -90,7 +67,7 @@ export async function solveCheckpoint(
   return { localAccountId };
 }
 
-export async function createHostedAuthUrl(): Promise<{ url: string }> {
+export async function createHostedAuthUrl(userId: string | null): Promise<{ url: string }> {
   const dsn = await configService.unipileDsn();
   if (!dsn) throw new ApiError(503, "Unipile DSN não configurado");
 
@@ -103,9 +80,35 @@ export async function createHostedAuthUrl(): Promise<{ url: string }> {
     expiresOn,
     successRedirectUrl: `${frontendOrigin}/conectar?hosted=ok`,
     failureRedirectUrl: `${frontendOrigin}/conectar?hosted=error`,
-    name: "Link ON hosted auth",
+    name: `linkon-connect-${userId ?? "global"}-${Date.now()}`,
   });
   return { url: result.url };
+}
+
+export async function confirmHosted(
+  userId: string | null,
+  opts: { pending: boolean },
+): Promise<{ accounts: number }> {
+  const { items = [] } = await unipile.listAccounts();
+  const prefix = `linkon-connect-${userId ?? "global"}-`;
+  const matched = items.filter((a) => typeof a.name === "string" && a.name.startsWith(prefix));
+  let created = 0;
+  for (const acc of matched) {
+    if (userId) {
+      const owned = await prisma.account.count({
+        where: { userId, status: { not: "REJECTED" } },
+      });
+      if (owned > 0) continue;
+    }
+    const status = opts.pending ? "PENDING_LINKEDIN" : "OK";
+    await prisma.account.upsert({
+      where: { unipileAccountId: acc.id },
+      update: { status, username: acc.name, userId: userId ?? null },
+      create: { unipileAccountId: acc.id, username: acc.name, status, authMethod: "HOSTED", userId: userId ?? null },
+    });
+    created += 1;
+  }
+  return { accounts: created };
 }
 
 export async function registerWebhooks(): Promise<{ messagingId?: string; usersId?: string }> {
