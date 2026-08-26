@@ -108,6 +108,7 @@ adminRouter.get(
         createdAt: true,
         updatedAt: true,
         _count: { select: { campaigns: true } },
+        user: { select: { id: true, username: true } },
       },
     });
     res.json({ items: accounts });
@@ -181,6 +182,17 @@ adminRouter.post(
     const { password } = resetPasswordSchema.parse(req.body);
     await resetUserPassword(req.params.id, password);
     res.json({ ok: true });
+  }),
+);
+
+adminRouter.get(
+  "/global",
+  ah(async (_req, res) => {
+    const [campaigns, extractions] = await Promise.all([
+      prisma.campaign.count({ where: { userId: null } }),
+      prisma.extraction.count({ where: { userId: null } }),
+    ]);
+    res.json({ campaigns, extractions });
   }),
 );
 
