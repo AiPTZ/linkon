@@ -10,7 +10,7 @@ import {
   listExtractions,
 } from "../services/extraction.service";
 import { ApiError } from "../utils/errors";
-import { currentUser, resolveScope, assertAccountInScope } from "../utils/scope";
+import { resolveScope, assertAccountInScope } from "../utils/scope";
 import { ah } from "./handler";
 
 export const extractionsRouter = Router();
