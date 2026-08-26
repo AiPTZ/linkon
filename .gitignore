@@ -106,8 +106,8 @@
 
 # Environment and secrets
 **/.env
-**/.env.local
-**/.env.*.local
+**/.env.*
+!**/.env.example
 *.pem
 *.key
 
@@ -174,3 +174,23 @@
 *.lz
 *.lzma
 *.iso
+
+# Local persistence (SQLite, Redis dump)
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-journal
+dump.rdb
+
+# Next.js build output
+**/.next/
+
+# Unreferenced design mockups
+frontend/public/glass-mockup.html
+
+# Internal dev workflow (local plans/specs)
+.superpowers/
+docs/superpowers/
