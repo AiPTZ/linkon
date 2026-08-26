@@ -1,4 +1,4 @@
-import type { AccountStatus, CampaignStatus, LeadStatus } from "../types";
+import type { AccountStatus, CampaignStatus, LeadStatus, UserStatus } from "../types";
 
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
   DRAFT: "Rascunho",
@@ -19,6 +19,8 @@ export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = {
   STOPPED: "Parada",
   CREDENTIALS: "Credenciais inválidas",
   PERMISSIONS: "Sem permissão",
+  PENDING_LINKEDIN: "Aguardando aprovação",
+  REJECTED: "Rejeitada",
 };
 
 export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
@@ -49,14 +51,34 @@ export function campaignStatusStyle(status: CampaignStatus): string {
   }
 }
 
+export const USER_STATUS_LABEL: Record<UserStatus, string> = {
+  PENDING: "Pendente",
+  ACTIVE: "Ativo",
+  BLOCKED: "Bloqueado",
+};
+
+export function userStatusStyle(status: UserStatus): string {
+  switch (status) {
+    case "ACTIVE":
+      return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
+    case "BLOCKED":
+      return "bg-red-500/15 text-red-400 border-red-500/30";
+    default:
+      return "bg-amber-500/15 text-amber-400 border-amber-500/30";
+  }
+}
+
 export function accountStatusStyle(status: AccountStatus): string {
   switch (status) {
     case "OK":
       return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
     case "CHECKPOINT":
       return "bg-amber-500/15 text-amber-400 border-amber-500/30";
+    case "PENDING_LINKEDIN":
+      return "bg-amber-500/15 text-amber-400 border-amber-500/30";
     case "DISCONNECTED":
     case "ERROR":
+    case "REJECTED":
       return "bg-red-500/15 text-red-400 border-red-500/30";
     default:
       return "bg-ink-500/40 text-cream/60 border-ink-400";

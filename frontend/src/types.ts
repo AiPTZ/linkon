@@ -7,6 +7,25 @@ export type CampaignStatus =
   | "COMPLETED"
   | "ERROR";
 
+export type UserRole = "ADMIN" | "USER";
+
+export type UserStatus = "PENDING" | "ACTIVE" | "BLOCKED";
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  name: string;
+  role: UserRole;
+  status: UserStatus;
+}
+
+export interface AdminUser extends AuthUser {
+  whatsapp: string | null;
+  status: UserStatus;
+  createdAt: string;
+  _count?: { accounts: number; campaigns: number; extractions: number };
+}
+
 export type AccountStatus =
   | "CONNECTING"
   | "OK"
@@ -15,7 +34,9 @@ export type AccountStatus =
   | "ERROR"
   | "STOPPED"
   | "CREDENTIALS"
-  | "PERMISSIONS";
+  | "PERMISSIONS"
+  | "PENDING_LINKEDIN"
+  | "REJECTED";
 
 export type LeadStatus =
   | "PENDING"
@@ -67,6 +88,7 @@ export interface Account {
   updatedAt: string;
   _count?: { campaigns: number };
   campaigns?: Pick<Campaign, "id" | "name" | "status">[];
+  user?: { id: string; username: string | null } | null;
 }
 
 export interface ChatbotRule {
@@ -124,6 +146,9 @@ export interface Lead {
   acceptedAt: string | null;
   lastMessageAt: string | null;
   lastMessageText: string | null;
+  emails: string | null;
+  phones: string | null;
+  contactScrapedAt: string | null;
   nextInviteAt: string | null;
   currentBlockId: string | null;
   replyCount: number;
@@ -141,6 +166,15 @@ export interface LogEvent {
   message: string;
   payload: string | null;
   createdAt: string;
+}
+
+export interface ContactScrapeStats {
+  total: number;
+  scraped: number;
+  withContact: number;
+  withEmail: number;
+  withPhone: number;
+  pending: number;
 }
 
 export interface Paginated<T> {
@@ -211,6 +245,42 @@ export interface Notification {
   message: string;
   payload: string | null;
   read: boolean;
+  createdAt: string;
+}
+
+export type ExtractionStatus = "PROCESSING" | "COMPLETED" | "FAILED";
+
+export interface Extraction {
+  id: string;
+  name: string;
+  searchUrl: string;
+  accountId: string;
+  account: { id: string; username: string | null };
+  status: ExtractionStatus;
+  maxResults: number;
+  totalFound: number;
+  processed: number;
+  withContact: number;
+  error: string | null;
+  leadsCount: number;
+  createdAt: string;
+  updatedAt: string;
+  user?: { id: string; username: string | null } | null;
+}
+
+export interface ExtractedLead {
+  id: string;
+  extractionId: string;
+  providerId: string;
+  publicIdentifier: string | null;
+  name: string | null;
+  headline: string | null;
+  profileUrl: string | null;
+  emails: string | null;
+  phones: string | null;
+  socials: string | null;
+  networkDistance: string | null;
+  scrapedAt: string | null;
   createdAt: string;
 }
 
