@@ -1,0 +1,19 @@
+{
+  "name": "link-on",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Link ON - Plataforma de automacao de LinkedIn via API da Unipile",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "bash start.sh",
+    "build": "npm run build -w @linkon/backend && npm run build -w @linkon/frontend",
+    "typecheck": "npm run typecheck -w @linkon/backend && npm run typecheck -w @linkon/frontend",
+    "db:push": "npm run db:push -w @linkon/backend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
