@@ -1,24 +1,25 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Link2, Settings, ShieldCheck, UserPlus, X, Menu, Plus, LogOut, Home, Sun, Moon, Radar, HelpCircle } from "lucide-react";
+import { Link2, Settings, ShieldCheck, UserPlus, X, Menu, Plus, LogOut, Home, Sun, Moon, Radar, ScanSearch, HelpCircle, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Logo } from "./Logo";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 import { NotificationBell } from "./NotificationBell";
 
-const NAV = [
-  { to: "/", label: "Início", icon: Home, end: true },
-  { to: "/campanhas", label: "Campanhas", icon: Link2 },
-  { to: "/disparos", label: "Disparos", icon: Radar },
-  { to: "/conectar", label: "Contas LinkedIn", icon: UserPlus },
-  { to: "/administracao", label: "Administração", icon: ShieldCheck },
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
-  { to: "/tutorial", label: "Tutorial", icon: HelpCircle },
-];
-
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const isAdmin = user?.role === "ADMIN";
+  const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
+    { to: "/", label: "Início", icon: Home, end: true },
+    { to: "/campanhas", label: "Campanhas", icon: Link2 },
+    { to: "/disparos", label: "Disparos", icon: Radar },
+    { to: "/extracao", label: "Extração", icon: ScanSearch },
+    { to: "/conectar", label: "Conta LinkedIn", icon: UserPlus },
+    ...(isAdmin ? [{ to: "/administracao", label: "Administração", icon: ShieldCheck }] : []),
+    { to: "/configuracoes", label: "Configurações", icon: Settings },
+    { to: "/tutorial", label: "Tutorial", icon: HelpCircle },
+  ];
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pb-6 pt-6">
@@ -76,7 +77,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-cream">{user?.username}</div>
-              <div className="text-xs text-cream/40">Administrador</div>
+              <div className="text-xs text-cream/40">{isAdmin ? "Administrador" : "Usuário"}</div>
             </div>
             <button
               type="button"
@@ -114,6 +115,7 @@ function MobileThemeToggle() {
 
 export function Layout() {
   const [open, setOpen] = useState(false);
+  const { operatingAs, clearOperatingAs } = useAuth();
 
   return (
     <div className="min-h-dvh bg-ink">
@@ -164,6 +166,23 @@ export function Layout() {
       {/* Main content */}
       <main className="px-4 py-6 sm:px-6 lg:ml-64 lg:px-10 lg:py-8">
         <div className="mx-auto max-w-6xl">
+          {operatingAs && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-2.5 text-sm">
+              <span className="text-cream">
+                Operando como <span className="font-semibold text-gold-400">{operatingAs.name || operatingAs.username}</span>
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary !px-3 !py-1.5 text-xs"
+                onClick={() => {
+                  clearOperatingAs();
+                  window.location.assign("/administracao");
+                }}
+              >
+                Voltar ao painel
+              </button>
+            </div>
+          )}
           <Outlet />
         </div>
       </main>
