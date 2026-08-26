@@ -13,12 +13,19 @@ model AppConfig {
   updatedAt DateTime @updatedAt
 }
 
-model AdminUser {
-  id           String   @id @default(cuid())
-  username     String   @unique
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  username     String     @unique
   passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  whatsapp     String?
+  role         String     @default("USER")
+  status       String     @default("PENDING")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  accounts     Account[]
+  campaigns    Campaign[]
+  extractions  Extraction[]
 }
 
 model Account {
@@ -32,8 +39,11 @@ model Account {
   credentialsEnc   String?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+  userId           String?
+  user             User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   campaigns        Campaign[]
   logs             LogEvent[]
+  extractions      Extraction[]
 }
 
 model Campaign {
@@ -66,6 +76,8 @@ model Campaign {
   maxLeads             Int        @default(1000)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
+  userId               String?
+  user                 User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   leads                Lead[]
   logs                 LogEvent[]
 }
@@ -85,6 +97,9 @@ model Lead {
   acceptedAt       DateTime?
   lastMessageAt    DateTime?
   lastMessageText  String?
+  emails           String?
+  phones           String?
+  contactScrapedAt DateTime?
   nextInviteAt     DateTime?
   currentBlockId   String?
   replyCount       Int       @default(0)
@@ -93,6 +108,48 @@ model Lead {
 
   @@unique([campaignId, providerId])
   @@index([campaignId, status])
+}
+
+model Extraction {
+  id           String    @id @default(cuid())
+  name         String
+  searchUrl    String
+  accountId    String
+  account      Account   @relation(fields: [accountId], references: [id])
+  status       String    @default("PROCESSING")
+  maxResults   Int       @default(250)
+  totalFound   Int       @default(0)
+  processed    Int       @default(0)
+  withContact  Int       @default(0)
+  error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  leads        ExtractedLead[]
+
+  @@index([accountId])
+  @@index([status])
+}
+
+model ExtractedLead {
+  id               String     @id @default(cuid())
+  extractionId     String
+  extraction       Extraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+  providerId       String
+  publicIdentifier String?
+  name             String?
+  headline         String?
+  profileUrl       String?
+  emails           String?
+  phones           String?
+  socials          String?
+  networkDistance  String?
+  scrapedAt        DateTime?
+  createdAt        DateTime   @default(now())
+
+  @@unique([extractionId, providerId])
+  @@index([extractionId])
 }
 
 model LogEvent {
