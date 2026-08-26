@@ -183,3 +183,26 @@ adminRouter.post(
     res.json({ ok: true });
   }),
 );
+
+adminRouter.post(
+  "/accounts/:id/approve",
+  ah(async (req, res) => {
+    const account = await prisma.account.findUnique({ where: { id: req.params.id } });
+    if (!account) throw new ApiError(404, "Conta não encontrada");
+    if (account.status !== "PENDING_LINKEDIN") throw new ApiError(400, "Conta não está aguardando aprovação");
+    await prisma.account.update({ where: { id: account.id }, data: { status: "OK", checkpointType: null } });
+    await createLog({ type: "ACCOUNT_CONNECTED", message: `Conta ${account.username ?? account.unipileAccountId} aprovada pelo administrador`, accountId: account.id });
+    res.json({ ok: true });
+  }),
+);
+
+adminRouter.post(
+  "/accounts/:id/reject",
+  ah(async (req, res) => {
+    const account = await prisma.account.findUnique({ where: { id: req.params.id } });
+    if (!account) throw new ApiError(404, "Conta não encontrada");
+    if (account.status !== "PENDING_LINKEDIN") throw new ApiError(400, "Conta não está aguardando aprovação");
+    await prisma.account.update({ where: { id: account.id }, data: { status: "REJECTED" } });
+    res.json({ ok: true });
+  }),
+);
