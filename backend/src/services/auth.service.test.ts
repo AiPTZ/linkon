@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../lib/prisma", () => ({
   prisma: {
-    account: { findUnique: vi.fn(), update: vi.fn(), upsert: vi.fn(), count: vi.fn() },
+    account: { findUnique: vi.fn(), update: vi.fn(), upsert: vi.fn(), count: vi.fn(), create: vi.fn() },
     campaign: { updateMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -16,7 +16,7 @@ vi.mock("./log.service", () => ({ createLog: vi.fn() }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { disconnectAccount, confirmHosted } from "./auth.service";
+import { disconnectAccount, confirmHosted, syncAccounts } from "./auth.service";
 import { ApiError } from "../utils/errors";
 import type { Account } from "@prisma/client";
 
@@ -111,5 +111,36 @@ describe("confirmHosted", () => {
     const res = await confirmHosted("U1", { pending: true });
     expect(res.accounts).toBe(0);
     expect(accountUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("syncAccounts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("preserva conta PENDING_LINKEDIN durante sync", async () => {
+    listAccounts.mockResolvedValue({
+      items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000", sources: [{ status: "OK" }] }],
+    });
+    accountFind.mockResolvedValue({ ...account, status: "PENDING_LINKEDIN", userId: "U1" });
+    await syncAccounts();
+    expect(accountUpdate).not.toHaveBeenCalled();
+  });
+
+  it("preserva conta REJECTED durante sync", async () => {
+    listAccounts.mockResolvedValue({
+      items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000", sources: [{ status: "OK" }] }],
+    });
+    accountFind.mockResolvedValue({ ...account, status: "REJECTED", userId: "U1" });
+    await syncAccounts();
+    expect(accountUpdate).not.toHaveBeenCalled();
+  });
+
+  it("atualiza status de conta comum e cria contas novas", async () => {
+    listAccounts.mockResolvedValue({ items: [{ id: "UA1", name: "arcanjo", sources: [{ status: "OK" }] }] });
+    accountFind.mockResolvedValue(account);
+    await syncAccounts();
+    expect(accountUpdate).toHaveBeenCalled();
   });
 });

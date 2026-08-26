@@ -161,15 +161,22 @@ export async function syncAccounts(): Promise<void> {
   const { items = [] } = await unipile.listAccounts();
   for (const acc of items) {
     const status = acc.sources?.[0]?.status ?? acc.status ?? "OK";
-    await prisma.account.upsert({
-      where: { unipileAccountId: acc.id },
-      update: { status, username: acc.name },
-      create: {
-        unipileAccountId: acc.id,
-        username: acc.name,
-        status,
-        authMethod: "HOSTED",
-      },
+    const local = await prisma.account.findUnique({ where: { unipileAccountId: acc.id } });
+    if (!local) {
+      await prisma.account.create({
+        data: {
+          unipileAccountId: acc.id,
+          username: acc.name,
+          status,
+          authMethod: "HOSTED",
+        },
+      });
+      continue;
+    }
+    if (local.status === "PENDING_LINKEDIN" || local.status === "REJECTED") continue;
+    await prisma.account.update({
+      where: { id: local.id },
+      data: { status, username: acc.name },
     });
   }
 }
