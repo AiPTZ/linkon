@@ -13,13 +13,16 @@ import {
   registerUser,
 } from "../services/user.service";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { rateLimit } from "../middleware/rateLimit";
 import { ah } from "./handler";
 
 export const authRouter = Router();
 
 const loginSchema = z.object({ username: z.string().min(1), password: z.string().min(1) });
 
-authRouter.post("/login", ah(async (req, res) => {
+const loginRateLimit = rateLimit({ windowMs: 60_000, max: 10 });
+
+authRouter.post("/login", loginRateLimit, ah(async (req, res) => {
   const body = loginSchema.parse(req.body);
   res.json(await loginUser(body.username, body.password));
 }));
