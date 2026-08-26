@@ -98,7 +98,16 @@ export function verifyToken(token: string): AuthPayload {
 export async function listUsers(): Promise<(PublicUser & { whatsapp: string | null; status: string; createdAt: Date; _count: { accounts: number; campaigns: number; extractions: number } })[]> {
   return prisma.user.findMany({
     orderBy: { createdAt: "asc" },
-    include: { _count: { select: { accounts: true, campaigns: true, extractions: true } } },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      role: true,
+      status: true,
+      whatsapp: true,
+      createdAt: true,
+      _count: { select: { accounts: true, campaigns: true, extractions: true } },
+    },
   });
 }
 
