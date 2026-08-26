@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
   ExternalLink,
@@ -12,6 +12,7 @@ import {
   Webhook,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { Account } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
 import { PageLoader } from "../components/Spinner";
@@ -29,6 +30,9 @@ interface NativeResponse {
 
 export function ConnectPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const [params] = useSearchParams();
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [unipileConfigured, setUnipileConfigured] = useState<boolean | null>(null);
 
@@ -62,6 +66,16 @@ export function ConnectPage() {
       .catch(() => setUnipileConfigured(false));
     loadAccounts();
   }, [loadAccounts]);
+
+  useEffect(() => {
+    if (params.get("hosted") === "ok") {
+      api
+        .post<{ accounts: number }>("/accounts/confirm-hosted")
+        .then((r) => toast("success", r.accounts > 0 ? "Conta conectada e enviada para aprovação" : "Aguardando conexão..."))
+        .catch((e) => toastFromError(toast, e))
+        .finally(loadAccounts);
+    }
+  }, [params, loadAccounts, toast]);
 
   async function onNativeSubmit(e: FormEvent) {
     e.preventDefault();
@@ -178,47 +192,51 @@ export function ConnectPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <button
-          type="button"
-          className="card group p-5 text-left transition-all hover:border-gold-500/40"
-          onClick={() => {
-            if (!unipileConfigured) return;
-            setNativeOpen((v) => !v);
-            setCheckpointAccountId(null);
-          }}
-          disabled={!unipileConfigured}
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-500/10 border border-gold-500/30">
-              <KeyRound className="h-5 w-5 text-gold-500" />
-            </div>
-            <div>
-              <h2 className="font-medium text-cream">Login nativo (email e senha)</h2>
-              <p className="text-xs text-cream/50">Conexão direta com a conta LinkedIn</p>
-            </div>
-          </div>
-        </button>
+      {(!isAdmin && accounts.length > 0) ? null : (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          {isAdmin && (
+            <button
+              type="button"
+              className="card group p-5 text-left transition-all hover:border-gold-500/40"
+              onClick={() => {
+                if (!unipileConfigured) return;
+                setNativeOpen((v) => !v);
+                setCheckpointAccountId(null);
+              }}
+              disabled={!unipileConfigured}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-500/10 border border-gold-500/30">
+                  <KeyRound className="h-5 w-5 text-gold-500" />
+                </div>
+                <div>
+                  <h2 className="font-medium text-cream">Login nativo (email e senha)</h2>
+                  <p className="text-xs text-cream/50">Conexão direta com a conta LinkedIn</p>
+                </div>
+              </div>
+            </button>
+          )}
 
-        <button
-          type="button"
-          className="card group p-5 text-left transition-all hover:border-gold-500/40 disabled:opacity-40"
-          onClick={onHosted}
-          disabled={!unipileConfigured || hostedLoading}
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-500/10 border border-gold-500/30">
-              {hostedLoading ? <Loader2 className="h-5 w-5 animate-spin text-gold-500" /> : <ShieldCheck className="h-5 w-5 text-gold-500" />}
+          <button
+            type="button"
+            className="card group p-5 text-left transition-all hover:border-gold-500/40 disabled:opacity-40"
+            onClick={onHosted}
+            disabled={!unipileConfigured || hostedLoading}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-500/10 border border-gold-500/30">
+                {hostedLoading ? <Loader2 className="h-5 w-5 animate-spin text-gold-500" /> : <ShieldCheck className="h-5 w-5 text-gold-500" />}
+              </div>
+              <div>
+                <h2 className="font-medium text-cream">Assistente do LinkedIn</h2>
+                <p className="text-xs text-cream/50">
+                  Conexão guiada em nova aba (recomendado) <ExternalLink className="inline h-3 w-3" />
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-medium text-cream">Assistente do LinkedIn</h2>
-              <p className="text-xs text-cream/50">
-                Conexão guiada em nova aba (recomendado) <ExternalLink className="inline h-3 w-3" />
-              </p>
-            </div>
-          </div>
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
 
       {nativeOpen && unipileConfigured && (
         <form onSubmit={onNativeSubmit} className="card mt-4 space-y-4 p-5">
@@ -304,35 +322,39 @@ export function ConnectPage() {
         </form>
       )}
 
-      <section className="card mt-6 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Webhook className="h-4 w-4 text-gold-500" />
-            <h2 className="font-medium text-cream">Webhooks da Unipile</h2>
+      {isAdmin && (
+        <section className="card mt-6 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Webhook className="h-4 w-4 text-gold-500" />
+              <h2 className="font-medium text-cream">Webhooks da Unipile</h2>
+            </div>
+            <button type="button" className="btn btn-secondary" disabled={webhookLoading || !unipileConfigured} onClick={onRegisterWebhooks}>
+              {webhookLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Registrar webhooks
+            </button>
           </div>
-          <button type="button" className="btn btn-secondary" disabled={webhookLoading || !unipileConfigured} onClick={onRegisterWebhooks}>
-            {webhookLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Registrar webhooks
-          </button>
-        </div>
-        <p className="mt-2 text-sm text-cream/50">
-          Necessário para detectar aceite de convites e mensagens em tempo real. Exige a URL pública
-          do webhook configurada nas{" "}
-          <Link to="/configuracoes" className="underline text-gold-400 hover:text-gold-300">
-            configurações
-          </Link>
-          .
-        </p>
-        {webhookResult && <p className="mt-2 text-sm text-emerald-400">{webhookResult}</p>}
-      </section>
+          <p className="mt-2 text-sm text-cream/50">
+            Necessário para detectar aceite de convites e mensagens em tempo real. Exige a URL pública
+            do webhook configurada nas{" "}
+            <Link to="/configuracoes" className="underline text-gold-400 hover:text-gold-300">
+              configurações
+            </Link>
+            .
+          </p>
+          {webhookResult && <p className="mt-2 text-sm text-emerald-400">{webhookResult}</p>}
+        </section>
+      )}
 
       <section className="mt-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-serif text-xl text-cream">Contas conectadas</h2>
-          <button type="button" className="btn btn-secondary !px-3 !py-1.5 text-xs" onClick={loadAccounts}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            Sincronizar
-          </button>
+          {isAdmin && (
+            <button type="button" className="btn btn-secondary !px-3 !py-1.5 text-xs" onClick={loadAccounts}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              Sincronizar
+            </button>
+          )}
         </div>
 
         {accounts.length === 0 ? (
