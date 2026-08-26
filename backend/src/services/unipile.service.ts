@@ -222,6 +222,39 @@ export class UnipileService {
     });
   }
 
+  async getUserContactInfo(
+    accountId: string,
+    providerId: string,
+  ): Promise<{ emails: string[]; phones: string[] }> {
+    const profile = (await this.getProfile(accountId, providerId)) as unknown as {
+      contact_info?: { emails?: string[]; phones?: string[] };
+    };
+    return {
+      emails: Array.isArray(profile.contact_info?.emails) ? profile.contact_info.emails : [],
+      phones: Array.isArray(profile.contact_info?.phones) ? profile.contact_info.phones : [],
+    };
+  }
+
+  async getUserContactDetails(
+    accountId: string,
+    providerId: string,
+  ): Promise<{ emails: string[]; phones: string[]; socials: string[]; networkDistance: string | null }> {
+    const profile = (await this.getProfile(accountId, providerId)) as unknown as {
+      contact_info?: { emails?: string[]; phones?: string[]; websites?: string[] };
+      websites?: string[];
+      network_distance?: string;
+    };
+    const contactWebsites = Array.isArray(profile.contact_info?.websites) ? profile.contact_info.websites : [];
+    const topWebsites = Array.isArray(profile.websites) ? profile.websites : [];
+    const socials = [...new Set([...topWebsites, ...contactWebsites])];
+    return {
+      emails: Array.isArray(profile.contact_info?.emails) ? profile.contact_info.emails : [],
+      phones: Array.isArray(profile.contact_info?.phones) ? profile.contact_info.phones : [],
+      socials,
+      networkDistance: profile.network_distance ?? null,
+    };
+  }
+
   getRelations(accountId: string, cursor?: string, limit = 1000): Promise<RelationsPage> {
     const params: Record<string, string> = { account_id: accountId, limit: String(limit) };
     if (cursor) params.cursor = cursor;

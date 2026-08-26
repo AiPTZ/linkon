@@ -135,7 +135,7 @@ export async function processFlowCampaign(campaign: Campaign): Promise<void> {
   await processFlowStep(fresh, account, due, flow);
 }
 
-async function processInviteCampaign(campaign: Campaign): Promise<void> {
+export async function processInviteCampaign(campaign: Campaign): Promise<void> {
   const fresh = await refreshCounters(campaign);
   const now = new Date();
 
@@ -178,7 +178,18 @@ async function processInviteCampaign(campaign: Campaign): Promise<void> {
 
   if (!withinLimits(fresh)) return;
 
-  const delay = randomDelayMs(fresh.minDelayMin, fresh.maxDelayMin);
+  const lastScheduled = await prisma.lead.findFirst({
+    where: { campaignId: fresh.id, nextInviteAt: { not: null } },
+    orderBy: { nextInviteAt: "desc" },
+    select: { nextInviteAt: true },
+  });
+  let delay: number;
+  if (!lastScheduled?.nextInviteAt) {
+    delay = 0;
+  } else {
+    const intervalMs = fresh.maxDelayMin * 60_000;
+    delay = Math.max(0, lastScheduled.nextInviteAt.getTime() + intervalMs - Date.now());
+  }
   await prisma.lead.update({
     where: { id: due.id },
     data: { nextInviteAt: new Date(Date.now() + delay) },
@@ -285,16 +296,16 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
 
   let delay: number;
   if (fresh.mode === "DISPARO") {
-    const lastSent = await prisma.lead.findFirst({
-      where: { campaignId: fresh.id, lastMessageAt: { not: null } },
-      orderBy: { lastMessageAt: "desc" },
-      select: { lastMessageAt: true },
+    const lastScheduled = await prisma.lead.findFirst({
+      where: { campaignId: fresh.id, nextInviteAt: { not: null } },
+      orderBy: { nextInviteAt: "desc" },
+      select: { nextInviteAt: true },
     });
-    if (!lastSent?.lastMessageAt) {
+    if (!lastScheduled?.nextInviteAt) {
       delay = 0;
     } else {
       const intervalMs = fresh.maxDelayMin * 60_000;
-      delay = Math.max(0, lastSent.lastMessageAt.getTime() + intervalMs - Date.now());
+      delay = Math.max(0, lastScheduled.nextInviteAt.getTime() + intervalMs - Date.now());
     }
   } else {
     delay = randomDelayMs(fresh.minDelayMin, fresh.maxDelayMin);

@@ -1,0 +1,52 @@
+{
+  "name": "@linkon/backend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:invite-worker": "tsx watch src/workers/invite.worker.ts",
+    "dev:chatbot-worker": "tsx watch src/workers/chatbot.worker.ts",
+    "dev:search-worker": "tsx watch src/workers/search.worker.ts",
+    "dev:sweep-worker": "tsx watch src/workers/sweep.worker.ts",
+    "dev:contacts-worker": "tsx watch src/workers/contacts.worker.ts",
+    "dev:extraction-worker": "tsx watch src/workers/extraction.worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "start:invite-worker": "node dist/workers/invite.worker.js",
+    "start:chatbot-worker": "node dist/workers/chatbot.worker.js",
+    "start:search-worker": "node dist/workers/search.worker.js",
+    "start:sweep-worker": "node dist/workers/sweep.worker.js",
+    "start:contacts-worker": "node dist/workers/contacts.worker.js",
+    "start:extraction-worker": "node dist/workers/extraction.worker.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "bcryptjs": "^3.0.3",
+    "bullmq": "^5.34.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "ioredis": "^5.4.2",
+    "jsonwebtoken": "^9.0.3",
+    "node-cron": "^3.0.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.10.5",
+    "@types/node-cron": "^3.0.11",
+    "prisma": "^6.5.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

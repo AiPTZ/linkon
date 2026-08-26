@@ -34,10 +34,10 @@ vi.mock("./utils/time", async (importOriginal) => {
 
 import { prisma } from "./lib/prisma";
 import { refreshCounters, withinLimits } from "./services/invite.service";
-import { sweepQueue } from "./services/queue.service";
+import { sweepQueue, invitesQueue } from "./services/queue.service";
 import { notify } from "./services/notification.service";
 import { hasFlow } from "./services/flow.service";
-import { processBroadcastCampaign, processFlowCampaign } from "./scheduler";
+import { processBroadcastCampaign, processFlowCampaign, processInviteCampaign } from "./scheduler";
 import type { Campaign, Account, Lead } from "@prisma/client";
 
 const leadFindFirst = prisma.lead.findFirst as ReturnType<typeof vi.fn>;
@@ -47,6 +47,7 @@ const accountFind = prisma.account.findUnique as ReturnType<typeof vi.fn>;
 const refresh = refreshCounters as ReturnType<typeof vi.fn>;
 const within = withinLimits as ReturnType<typeof vi.fn>;
 const sweepAdd = sweepQueue.add as ReturnType<typeof vi.fn>;
+const inviteAdd = invitesQueue.add as ReturnType<typeof vi.fn>;
 const notifyFn = notify as ReturnType<typeof vi.fn>;
 const flowHas = hasFlow as ReturnType<typeof vi.fn>;
 
@@ -124,10 +125,10 @@ describe("processBroadcastCampaign", () => {
     );
   });
 
-  it("espaça disparos subsequentes do DISPARO em maxDelayMin após o último envio", async () => {
+  it("espaça disparos subsequentes do DISPARO em maxDelayMin após o último agendamento", async () => {
     leadFindFirst
       .mockResolvedValueOnce({ id: "L1", campaignId: "C1" } as Lead)
-      .mockResolvedValueOnce({ lastMessageAt: new Date(Date.now() - 10 * 60_000) });
+      .mockResolvedValueOnce({ nextInviteAt: new Date(Date.now() - 10 * 60_000) });
     await processBroadcastCampaign(campaign());
     const options = sweepAdd.mock.calls[0][2] as { delay: number };
     expect(options.delay).toBeGreaterThan(290_000);
@@ -168,6 +169,44 @@ describe("processBroadcastCampaign", () => {
       expect.objectContaining({ data: { status: "LIMIT_HIT" } }),
     );
     expect(notifyFn).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_LIMIT_HIT" }));
+  });
+});
+
+describe("processInviteCampaign", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    refresh.mockImplementation((c: Campaign) => Promise.resolve(c));
+    within.mockReturnValue(true);
+  });
+
+  it("agenda o primeiro convite do SEARCH imediatamente (delay 0)", async () => {
+    leadFindFirst.mockResolvedValue({ id: "L1", campaignId: "C1" } as Lead);
+    await processInviteCampaign(campaign({ mode: "SEARCH", searchUrl: "https://linkedin.com/search" }));
+    expect(inviteAdd).toHaveBeenCalledWith(
+      "invite",
+      { leadId: "L1", campaignId: "C1" },
+      expect.objectContaining({ delay: 0 }),
+    );
+  });
+
+  it("espaça convites subsequentes do SEARCH em maxDelayMin após o último agendamento", async () => {
+    leadFindFirst
+      .mockResolvedValueOnce({ id: "L1", campaignId: "C1" } as Lead)
+      .mockResolvedValueOnce({ nextInviteAt: new Date(Date.now() - 10 * 60_000) });
+    await processInviteCampaign(campaign({ mode: "SEARCH", searchUrl: "https://linkedin.com/search" }));
+    const options = inviteAdd.mock.calls[0][2] as { delay: number };
+    expect(options.delay).toBeGreaterThan(290_000);
+    expect(options.delay).toBeLessThan(310_000);
+  });
+
+  it("pausa SEARCH no limite semanal", async () => {
+    await processInviteCampaign(
+      campaign({ mode: "SEARCH", searchUrl: "https://linkedin.com/search", invitesSentWeek: 999 }),
+    );
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "LIMIT_HIT" } }),
+    );
+    expect(inviteAdd).not.toHaveBeenCalled();
   });
 });
 
