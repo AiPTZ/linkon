@@ -10,6 +10,7 @@ import {
   api,
   clearOperatingAs as clearStoredOperatingAs,
   clearToken,
+  getOperatingAsUser as getStoredOperatingAsUser,
   getToken,
   setOperatingAs as setStoredOperatingAs,
   setToken,
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setOperatingAsState(getStoredOperatingAsUser());
     const token = getToken();
     if (!token) {
       setLoading(false);
@@ -66,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setOperatingAs = useCallback((u: AuthUser) => {
     setOperatingAsState(u);
-    setStoredOperatingAs(u.id);
+    setStoredOperatingAs(u);
   }, []);
 
   const clearOperatingAs = useCallback(() => {

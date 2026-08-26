@@ -1,3 +1,5 @@
+import type { AuthUser } from "../types";
+
 const BASE = "/api";
 const TOKEN_KEY = "linkon_token";
 const OPERATING_KEY = "linkon_operating_as";
@@ -15,11 +17,23 @@ export function clearToken(): void {
 }
 
 export function getOperatingAs(): string | null {
-  return localStorage.getItem(OPERATING_KEY);
+  return getOperatingAsUser()?.id ?? null;
 }
 
-export function setOperatingAs(id: string): void {
-  localStorage.setItem(OPERATING_KEY, id);
+export function getOperatingAsUser(): AuthUser | null {
+  const raw = localStorage.getItem(OPERATING_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as AuthUser | null;
+    if (parsed && typeof parsed.id === "string") return parsed;
+  } catch {
+    /* legacy plain id stored before the user object format */
+  }
+  return { id: raw } as AuthUser;
+}
+
+export function setOperatingAs(user: AuthUser): void {
+  localStorage.setItem(OPERATING_KEY, JSON.stringify(user));
 }
 
 export function clearOperatingAs(): void {
