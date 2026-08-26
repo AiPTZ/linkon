@@ -1,8 +1,15 @@
 import { Router } from "express";
+import type { Request } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { resolveScope, assertAccountInScope } from "../utils/scope";
 import { importBroadcastLeads, setLeadSelection } from "../services/broadcast.service";
+import {
+  buildLeadsXlsx,
+  contactScrapeStats,
+  scheduleContactScrape,
+} from "../services/contacts.service";
 import {
   pauseCampaign,
   resumeCampaign,
@@ -145,6 +152,13 @@ async function withStats(campaignId: string) {
   return { ...campaign, stats, nextInviteAt: nextLead?.nextInviteAt ?? null };
 }
 
+async function getScopedCampaign(req: Request, id: string) {
+  const scope = resolveScope(req);
+  const campaign = await prisma.campaign.findFirst({ where: { id, userId: scope.userId } });
+  if (!campaign) throw new ApiError(404, "Campanha não encontrada");
+  return campaign;
+}
+
 campaignsRouter.post(
   "/",
   ah(async (req, res) => {
@@ -168,9 +182,14 @@ campaignsRouter.post(
 
     const account = await prisma.account.findUnique({ where: { id: data.accountId as string } });
     if (!account) throw new ApiError(400, "Conta vinculada não encontrada");
+    const scope = resolveScope(req);
+    assertAccountInScope(account, scope.userId);
 
     const campaign = await prisma.campaign.create({
-      data: data as {
+      data: {
+        ...data,
+        userId: scope.userId,
+      } as unknown as {
         name: string;
         searchUrl: string;
         accountId: string;
@@ -183,8 +202,9 @@ campaignsRouter.post(
 
 campaignsRouter.get(
   "/",
-  ah(async (_req, res) => {
+  ah(async (req, res) => {
     const campaigns = await prisma.campaign.findMany({
+      where: { userId: resolveScope(req).userId },
       orderBy: { createdAt: "desc" },
       include: {
         account: { select: { id: true, username: true, status: true } },
@@ -201,6 +221,15 @@ campaignsRouter.get(
       where: { selected: true },
       _count: { _all: true },
     });
+    const nextGroups = await prisma.lead.groupBy({
+      by: ["campaignId"],
+      where: {
+        status: { in: ["PENDING", "INVITED", "ACCEPTED", "RESPONDED"] },
+        OR: [{ currentBlockId: { not: null } }, { status: "PENDING" }],
+        nextInviteAt: { not: null, gt: new Date() },
+      },
+      _min: { nextInviteAt: true },
+    });
     const statsByCampaign: Record<string, Record<string, number>> = {};
     for (const g of groups) {
       statsByCampaign[g.campaignId] ??= {};
@@ -208,6 +237,8 @@ campaignsRouter.get(
     }
     const selectedByCampaign: Record<string, number> = {};
     for (const g of selectedGroups) selectedByCampaign[g.campaignId] = g._count._all;
+    const nextByCampaign: Record<string, Date | null> = {};
+    for (const g of nextGroups) nextByCampaign[g.campaignId] = g._min.nextInviteAt;
 
     res.json({
       items: campaigns.map((c) => ({
@@ -217,6 +248,7 @@ campaignsRouter.get(
           total: c._count.leads,
           selected: selectedByCampaign[c.id] ?? 0,
         },
+        nextInviteAt: nextByCampaign[c.id] ?? null,
       })),
     });
   }),
@@ -225,7 +257,8 @@ campaignsRouter.get(
 campaignsRouter.get(
   "/:id",
   ah(async (req, res) => {
-    const campaign = await withStats(req.params.id);
+    const scoped = await getScopedCampaign(req, req.params.id);
+    const campaign = await withStats(scoped.id);
     if (!campaign) throw new ApiError(404, "Campanha não encontrada");
     res.json(campaign);
   }),
@@ -234,14 +267,14 @@ campaignsRouter.get(
 campaignsRouter.put(
   "/:id",
   ah(async (req, res) => {
-    const existing = await prisma.campaign.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new ApiError(404, "Campanha não encontrada");
+    await getScopedCampaign(req, req.params.id);
 
     const body = updateCampaignSchema.parse(req.body);
     const data = toData(body);
     if (data.accountId) {
       const account = await prisma.account.findUnique({ where: { id: data.accountId as string } });
       if (!account) throw new ApiError(400, "Conta vinculada não encontrada");
+      assertAccountInScope(account, resolveScope(req).userId);
     }
 
     const campaign = await prisma.campaign.update({ where: { id: req.params.id }, data });
@@ -252,6 +285,7 @@ campaignsRouter.put(
 campaignsRouter.post(
   "/:id/start",
   ah(async (req, res) => {
+    await getScopedCampaign(req, req.params.id);
     await startCampaign(req.params.id);
     res.json({ ok: true });
   }),
@@ -260,6 +294,7 @@ campaignsRouter.post(
 campaignsRouter.post(
   "/:id/pause",
   ah(async (req, res) => {
+    await getScopedCampaign(req, req.params.id);
     await pauseCampaign(req.params.id);
     res.json({ ok: true });
   }),
@@ -268,6 +303,7 @@ campaignsRouter.post(
 campaignsRouter.post(
   "/:id/resume",
   ah(async (req, res) => {
+    await getScopedCampaign(req, req.params.id);
     await resumeCampaign(req.params.id);
     res.json({ ok: true });
   }),
@@ -276,6 +312,7 @@ campaignsRouter.post(
 campaignsRouter.post(
   "/:id/sweep",
   ah(async (req, res) => {
+    await getScopedCampaign(req, req.params.id);
     const result = await importBroadcastLeads(req.params.id);
     res.json(result);
   }),
@@ -284,8 +321,7 @@ campaignsRouter.post(
 campaignsRouter.delete(
   "/:id",
   ah(async (req, res) => {
-    const existing = await prisma.campaign.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new ApiError(404, "Campanha não encontrada");
+    await getScopedCampaign(req, req.params.id);
 
     await prisma.$transaction([
       prisma.logEvent.deleteMany({ where: { campaignId: req.params.id } }),
@@ -299,8 +335,7 @@ campaignsRouter.delete(
 campaignsRouter.get(
   "/:id/leads/selection",
   ah(async (req, res) => {
-    const campaign = await prisma.campaign.findUnique({ where: { id: req.params.id } });
-    if (!campaign) throw new ApiError(404, "Campanha não encontrada");
+    await getScopedCampaign(req, req.params.id);
     const [selected, total] = await Promise.all([
       prisma.lead.count({ where: { campaignId: req.params.id, selected: true } }),
       prisma.lead.count({ where: { campaignId: req.params.id } }),
@@ -317,6 +352,7 @@ const selectSchema = z.object({
 campaignsRouter.post(
   "/:id/leads/select",
   ah(async (req, res) => {
+    await getScopedCampaign(req, req.params.id);
     const { action, providerIds } = selectSchema.parse(req.body);
     const selected = await setLeadSelection(req.params.id, action, providerIds);
     res.json({ selected });
@@ -326,8 +362,7 @@ campaignsRouter.post(
 campaignsRouter.get(
   "/:id/leads",
   ah(async (req, res) => {
-    const campaign = await prisma.campaign.findUnique({ where: { id: req.params.id } });
-    if (!campaign) throw new ApiError(404, "Campanha não encontrada");
+    const campaign = await getScopedCampaign(req, req.params.id);
 
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 50));
@@ -363,11 +398,38 @@ campaignsRouter.get(
   }),
 );
 
+campaignsRouter.post(
+  "/:id/scrape-contacts",
+  ah(async (req, res) => {
+    const campaign = await getScopedCampaign(req, req.params.id);
+    const result = await scheduleContactScrape(campaign);
+    res.json(result);
+  }),
+);
+
+campaignsRouter.get(
+  "/:id/scrape-status",
+  ah(async (req, res) => {
+    await getScopedCampaign(req, req.params.id);
+    res.json(await contactScrapeStats(req.params.id));
+  }),
+);
+
+campaignsRouter.get(
+  "/:id/export-xlsx",
+  ah(async (req, res) => {
+    const campaign = await getScopedCampaign(req, req.params.id);
+    const { buffer, filename } = await buildLeadsXlsx(campaign);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }),
+);
+
 campaignsRouter.get(
   "/:id/logs",
   ah(async (req, res) => {
-    const campaign = await prisma.campaign.findUnique({ where: { id: req.params.id } });
-    if (!campaign) throw new ApiError(404, "Campanha não encontrada");
+    await getScopedCampaign(req, req.params.id);
 
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 50));
