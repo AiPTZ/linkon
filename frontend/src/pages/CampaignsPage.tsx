@@ -4,19 +4,27 @@ import { Plus, Trash2, Users, Send, CheckCheck, TrendingUp } from "lucide-react"
 import { api } from "../lib/api";
 import type { Campaign } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
+import { NextSendCountdown } from "../components/NextSendCountdown";
 import { PageLoader } from "../components/Spinner";
 import { formatDateTime, shortName } from "../lib/format";
 import { useToast, toastFromError } from "../components/Toast";
+
+const REFRESH_MS = 10_000;
 
 export function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    api
-      .get<{ items: Campaign[] }>("/campaigns")
-      .then((r) => setCampaigns(r.items))
-      .catch((err) => toastFromError(toast, err));
+    const load = () => {
+      api
+        .get<{ items: Campaign[] }>("/campaigns")
+        .then((r) => setCampaigns(r.items))
+        .catch((err) => toastFromError(toast, err));
+    };
+    load();
+    const t = setInterval(load, REFRESH_MS);
+    return () => clearInterval(t);
   }, [toast]);
 
   async function onDelete(c: Campaign) {
@@ -72,7 +80,7 @@ export function CampaignsPage() {
             <div key={c.id} className="relative">
               <Link
                 to={`/campanhas/${c.id}`}
-                className="card group p-5 transition-all duration-200 hover:border-gold-500/40 hover:shadow-gold"
+                className="card group flex h-full flex-col p-5 transition-all duration-200 hover:border-gold-500/40 hover:shadow-gold"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
@@ -118,8 +126,16 @@ export function CampaignsPage() {
                 </div>
               </div>
 
-              <div className="mt-3 text-[11px] text-cream/30">
-                Criada em {formatDateTime(c.createdAt)}
+              <div className="mt-auto pt-3">
+                <div className="text-[11px] text-cream/30">
+                  Criada em {formatDateTime(c.createdAt)}
+                </div>
+                {c.nextInviteAt && ["RUNNING", "IMPORTING"].includes(c.status) && (
+                  <div className="mt-2 flex items-center gap-2 border-t border-ink-400 pt-2 text-[11px]">
+                    <span className="uppercase tracking-wide text-cream/40">Próximo envio</span>
+                    <NextSendCountdown at={c.nextInviteAt} />
+                  </div>
+                )}
               </div>
               </Link>
               <button

@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   CheckCheck,
+  Download,
   ExternalLink,
+  FileSpreadsheet,
   Inbox,
   ListChecks,
   Loader2,
@@ -21,13 +23,14 @@ import {
   XCircle,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Campaign, Lead, LogEvent, Paginated } from "../types";
+import type { Campaign, ContactScrapeStats, Lead, LogEvent, Paginated } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
 import { StatCard } from "../components/StatCard";
 import { Pagination } from "../components/Pagination";
 import { PageLoader } from "../components/Spinner";
 import { formatDateTime, LEAD_STATUS_LABEL, shortName } from "../lib/format";
 import { BLOCK_DEFS, parseFlow } from "../lib/flow";
+import { formatCountdown } from "../components/NextSendCountdown";
 import { useToast, toastFromError } from "../components/Toast";
 
 type Tab = "leads" | "logs";
@@ -35,16 +38,6 @@ type Tab = "leads" | "logs";
 const LEAD_OPTIONS = ["", "PENDING", "INVITED", "ACCEPTED", "RESPONDED", "ERROR", "COMPLETED"] as const;
 
 const REFRESH_MS = 5_000;
-
-function formatCountdown(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const mm = String(m).padStart(2, "0");
-  const ss = String(s).padStart(2, "0");
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-}
 
 function Countdown({ at, now }: { at: string | null; now: number }) {
   if (!at) return <span className="text-cream/30">—</span>;
@@ -56,6 +49,16 @@ function Countdown({ at, now }: { at: string | null; now: number }) {
       {formatCountdown(target - now)}
     </span>
   );
+}
+
+function parseContact(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string").join("; ") : "";
+  } catch {
+    return "";
+  }
 }
 
 export function CampaignDetailPage() {
@@ -73,6 +76,9 @@ export function CampaignDetailPage() {
   const [logs, setLogs] = useState<Paginated<LogEvent> | null>(null);
 
   const [busy, setBusy] = useState<string | null>(null);
+
+  const [contactStats, setContactStats] = useState<ContactScrapeStats | null>(null);
+  const [scraping, setScraping] = useState(false);
 
   const [now, setNow] = useState(() => Date.now());
 
@@ -96,6 +102,13 @@ export function CampaignDetailPage() {
       .catch((e) => toastFromError(toast, e));
   }, [id, logPage, toast]);
 
+  const loadContactStats = useCallback(() => {
+    api
+      .get<ContactScrapeStats>(`/campaigns/${id}/scrape-status`)
+      .then(setContactStats)
+      .catch(() => {});
+  }, [id]);
+
   useEffect(() => {
     loadCampaign();
   }, [loadCampaign]);
@@ -104,6 +117,24 @@ export function CampaignDetailPage() {
     if (tab === "leads") loadLeads();
     else loadLogs();
   }, [tab, loadLeads, loadLogs]);
+
+  useEffect(() => {
+    if (!scraping) return;
+    const t = setInterval(() => {
+      api
+        .get<ContactScrapeStats>(`/campaigns/${id}/scrape-status`)
+        .then((s) => {
+          setContactStats(s);
+          if (s.pending === 0) setScraping(false);
+        })
+        .catch(() => {});
+    }, REFRESH_MS);
+    return () => clearInterval(t);
+  }, [scraping, id]);
+
+  useEffect(() => {
+    if (tab === "leads") loadContactStats();
+  }, [tab, loadContactStats]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1_000);
@@ -145,6 +176,34 @@ export function CampaignDetailPage() {
       await api.delete(`/campaigns/${id}`);
       toast("success", "Campanha excluída");
       navigate(isBroadcast ? "/disparos" : "/campanhas");
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onScrapeContacts() {
+    if (!campaign) return;
+    setBusy("scrape");
+    try {
+      const res = await api.post<{ scheduled: number }>(`/campaigns/${id}/scrape-contacts`);
+      toast("success", `Extração de contatos iniciada (${res.scheduled} lead[s])`);
+      setScraping(res.scheduled > 0);
+      loadContactStats();
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onExportXlsx() {
+    if (!campaign) return;
+    setBusy("export");
+    try {
+      await api.download(`/campaigns/${id}/export-xlsx`);
+      toast("success", "Planilha baixada");
     } catch (err) {
       toastFromError(toast, err);
     } finally {
@@ -429,6 +488,33 @@ export function CampaignDetailPage() {
                 Exibindo apenas os contatos selecionados, em ordem de envio
               </span>
             )}
+            <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-cream/45">
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              {contactStats && contactStats.total > 0
+                ? `${contactStats.scraped}/${contactStats.total} extraídos · ${contactStats.withContact} com contato`
+                : "Sem contatos extraídos"}
+              {scraping && <Loader2 className="h-3.5 w-3.5 animate-spin text-gold-400" />}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary !px-3 !py-1.5 text-xs"
+              disabled={busy !== null}
+              onClick={onScrapeContacts}
+              title="Buscar e-mails e telefones dos leads na Unipile (disponível para conexões de 1º grau)"
+            >
+              {busy === "scrape" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Extrair contatos
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary !px-3 !py-1.5 text-xs"
+              disabled={busy !== null}
+              onClick={onExportXlsx}
+              title="Baixar planilha com e-mails e telefones"
+            >
+              {busy === "export" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Baixar XLSX
+            </button>
           </div>
 
           {!leads ? (
@@ -452,6 +538,7 @@ export function CampaignDetailPage() {
                     <tr className="border-b border-ink-400">
                       <th className="table-header px-4 py-3">Nome</th>
                       <th className="table-header px-4 py-3">Cargo</th>
+                      <th className="table-header px-4 py-3">Contato</th>
                       <th className="table-header px-4 py-3">Status</th>
                       <th className="table-header px-4 py-3">{isBroadcast ? "Enviado em" : "Convidado"}</th>
                       <th className="table-header px-4 py-3">Próximo envio</th>
@@ -466,6 +553,9 @@ export function CampaignDetailPage() {
                         </td>
                         <td className="max-w-56 truncate px-4 py-3 text-cream/60">
                           {lead.headline ?? "—"}
+                        </td>
+                        <td className="max-w-48 truncate px-4 py-3 text-cream/60">
+                          {parseContact(lead.emails) || parseContact(lead.phones) || "—"}
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={lead.status} kind="lead" />

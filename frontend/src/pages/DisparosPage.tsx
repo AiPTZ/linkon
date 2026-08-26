@@ -4,6 +4,7 @@ import { CheckCheck, Plus, Radar, Send, Trash2, Users, XCircle } from "lucide-re
 import { api } from "../lib/api";
 import type { Campaign } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
+import { NextSendCountdown } from "../components/NextSendCountdown";
 import { PageLoader } from "../components/Spinner";
 import { formatDateTime, shortName } from "../lib/format";
 import { useToast, toastFromError } from "../components/Toast";
@@ -87,7 +88,7 @@ export function DisparosPage() {
               <div key={c.id} className="relative">
                 <Link
                   to={`/disparos/${c.id}`}
-                  className="card group p-5 transition-all duration-200 hover:border-gold-500/40 hover:shadow-gold"
+                  className="card group flex h-full flex-col p-5 transition-all duration-200 hover:border-gold-500/40 hover:shadow-gold"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="font-serif text-lg font-medium leading-snug text-cream group-hover:text-gold-400">
@@ -139,8 +140,16 @@ export function DisparosPage() {
                   )}
                 </div>
 
-                <div className="mt-3 text-[11px] text-cream/30">
-                  Criado em {formatDateTime(c.createdAt)}
+                <div className="mt-auto pt-3">
+                  <div className="text-[11px] text-cream/30">
+                    Criado em {formatDateTime(c.createdAt)}
+                  </div>
+                  {c.nextInviteAt && ["RUNNING", "IMPORTING"].includes(c.status) && (
+                    <div className="mt-2 flex items-center gap-2 border-t border-ink-400 pt-2 text-[11px]">
+                      <span className="uppercase tracking-wide text-cream/40">Próximo envio</span>
+                      <NextSendCountdown at={c.nextInviteAt} />
+                    </div>
+                  )}
                 </div>
                 </Link>
                 <button

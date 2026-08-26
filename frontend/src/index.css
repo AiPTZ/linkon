@@ -1,0 +1,276 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Tema escuro (padrão) — cinza, dourado e preto */
+  :root {
+    --ink: 10 10 11;
+    --ink-800: 17 17 19;
+    --ink-700: 22 22 24;
+    --ink-600: 30 30 33;
+    --ink-500: 42 42 46;
+    --ink-400: 58 58 64;
+    --gold-50: 253 248 231;
+    --gold-100: 250 238 199;
+    --gold-200: 245 223 154;
+    --gold-300: 239 203 107;
+    --gold-400: 232 184 75;
+    --gold-500: 212 175 55;
+    --gold-600: 184 145 44;
+    --gold-700: 148 116 35;
+    --gold-800: 107 84 25;
+    --gold-900: 74 58 18;
+    --cream: 245 242 234;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+
+  /* Tema claro — cinza, dourado e preto */
+  .light {
+    --ink: 232 232 236;
+    --ink-800: 255 255 255;
+    --ink-700: 250 250 252;
+    --ink-600: 235 235 240;
+    --ink-500: 214 214 222;
+    --ink-400: 176 176 188;
+    --cream: 20 20 24;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
+    color-scheme: light;
+  }
+
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-ink text-cream font-sans;
+    background-image:
+      radial-gradient(1000px 480px at 85% -5%, rgba(212, 175, 55, 0.07), transparent 60%),
+      radial-gradient(800px 420px at -10% 15%, rgba(212, 175, 55, 0.05), transparent 55%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    @apply bg-gold-500/30 text-white;
+  }
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a0a0b;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2e;
+    border-radius: 999px;
+    border: 2px solid #0a0a0b;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #947423;
+  }
+}
+
+@layer components {
+  /* ---- Botões ---- */
+  .btn {
+    @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ink;
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-b from-gold-400 via-gold-500 to-gold-600 text-black font-semibold shadow-[0_4px_20px_-2px_rgba(212,175,55,0.45)] hover:shadow-[0_6px_28px_-2px_rgba(212,175,55,0.6)] hover:brightness-110 active:brightness-95;
+  }
+  .btn-primary::after {
+    content: "";
+    @apply pointer-events-none absolute inset-0;
+    background: linear-gradient(
+      115deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.45) 50%,
+      transparent 70%
+    );
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+  }
+  .btn-primary:hover::after {
+    transform: translateX(100%);
+  }
+  .btn-secondary {
+    @apply btn bg-ink-700/80 text-cream hover:bg-ink-600 border border-ink-400/80 hover:border-gold-500/30;
+  }
+  .btn-danger {
+    @apply btn bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20;
+  }
+
+  /* ---- Cards ---- */
+  .card {
+    @apply relative rounded-2xl border border-ink-400 bg-ink-700/70 shadow-card backdrop-blur-sm;
+  }
+  .card::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 rounded-2xl;
+    background: linear-gradient(160deg, rgba(212, 175, 55, 0.06), transparent 40%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .card:hover::before {
+    opacity: 1;
+  }
+
+  /* ---- Formulários ---- */
+  .input {
+    @apply w-full rounded-xl border border-ink-400 bg-ink-800/90 px-3 py-2 text-sm text-cream placeholder:text-cream/25 transition-all duration-200 focus:outline-none focus:border-gold-500/60 focus:ring-1 focus:ring-gold-500/40 focus:shadow-[0_0_0_4px_rgba(212,175,55,0.08)];
+  }
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wide text-cream/45 mb-1.5;
+  }
+  .table-header {
+    @apply text-left text-xs font-semibold uppercase tracking-wider text-cream/35;
+  }
+
+  /* ---- Moldura com gradiente dourado (login) ---- */
+  .gold-frame {
+    position: relative;
+    background: linear-gradient(180deg, #161618, #111113);
+  }
+  .light .gold-frame {
+    background: linear-gradient(180deg, #ffffff, #f2f2f5);
+  }
+  .gold-frame::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(150deg, rgba(212, 175, 55, 0.6), rgba(212, 175, 55, 0.08) 35%, rgba(212, 175, 55, 0.06) 60%, rgba(212, 175, 55, 0.45));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ---- Navegação ativa ---- */
+  .gold-nav-active {
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.14), rgba(212, 175, 55, 0.04));
+    border: 1px solid rgba(212, 175, 55, 0.28);
+    box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.12);
+  }
+
+  /* ---- Texto em gradiente dourado ---- */
+  .gold-gradient-text {
+    background: linear-gradient(120deg, #f5df9a, #d4af37 45%, #b8912c 75%, #efcb6b);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@layer utilities {
+  /* ---- Textura de grão (noise) ---- */
+  .bg-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+  }
+
+  /* ---- Grade sutil de fundo ---- */
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(212, 175, 55, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(212, 175, 55, 0.05) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
+  }
+
+  /* ---- Orbes de brilho ---- */
+  .glow-orb {
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.16), transparent 62%);
+    filter: blur(30px);
+  }
+  .glow-orb-gold {
+    background: radial-gradient(circle, rgba(184, 145, 44, 0.12), transparent 62%);
+    filter: blur(40px);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* ---- React Flow (editor de fluxo) ---- */
+.flow-block {
+  min-width: 170px;
+  max-width: 210px;
+  border: 1px solid rgba(74, 68, 54, 0.8);
+  border-top-width: 3px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(28, 26, 20, 0.98), rgba(20, 18, 14, 0.98));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  color: #f4efe3;
+}
+.flow-block-selected {
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.65), 0 6px 22px rgba(0, 0, 0, 0.55);
+}
+.flow-node-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(20, 18, 14, 0.92);
+  color: rgba(248, 113, 113, 0.9);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.flow-block:hover .flow-node-delete,
+.flow-block-selected .flow-node-delete {
+  opacity: 1;
+}
+.flow-node-delete:hover {
+  background: rgba(248, 113, 113, 0.28);
+  color: #fff;
+}
+.flow-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: #d4af37 !important;
+  border: 2px solid #16130d !important;
+}
+.flow-handle-sim {
+  background: #34d399 !important;
+}
+.flow-handle-nao {
+  background: #f87171 !important;
+}
+.react-flow__edge-path {
+  stroke: #d4af37;
+  stroke-width: 1.6;
+}
+.react-flow__controls-button {
+  background: #16130d !important;
+  border-bottom: 1px solid rgba(74, 68, 54, 0.6) !important;
+  color: #f4efe3 !important;
+  fill: #f4efe3 !important;
+}
+.react-flow__controls-button:hover {
+  background: #262116 !important;
+}
+.react-flow__minimap-node {
+  fill: #d4af37;
+}
+.react-flow__edge-textbg {
+  fill: #16130d;
+}
+.react-flow__attribution {
+  display: none;
+}
