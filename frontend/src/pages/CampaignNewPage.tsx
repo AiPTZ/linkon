@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Bot, ChevronDown, MessageSquare, Plus, Save, Trash2, Workflow, X } from "lucide-react";
 import { api } from "../lib/api";
-import type { Account, CampaignPayload, ChatbotRule, Flow } from "../types";
+import type { Account, CampaignPayload, ChatbotKnowledgeBase, ChatbotRule, Flow, KnowledgeBaseEntry } from "../types";
 import { FlowEditor } from "../components/FlowEditor";
 import { emptyFlow } from "../lib/flow";
 import { useToast, toastFromError } from "../components/Toast";
@@ -38,6 +38,19 @@ export function CampaignNewPage() {
     workStartHour: 9,
     workEndHour: 18,
     chatbotEnabled: false,
+    chatbotMode: "RULES",
+    chatbotKnowledgeBase: {
+      product: "",
+      faq: [],
+      prices: [],
+      differentiators: [],
+      objections: [],
+    },
+    chatbotTone: "consultivo e profissional",
+    chatbotInitialMessageMode: "TEMPLATE",
+    chatbotInitialTemplate: "",
+    chatbotTransferMessage: "Vou conectar você com um especialista do nosso time.",
+    chatbotMaxTurns: 6,
     chatbotDefaultReply: DEFAULT_CHATBOT_REPLY,
     chatbotReplyDelayMin: 1,
     chatbotReplyDelayMax: 3,
@@ -53,6 +66,12 @@ export function CampaignNewPage() {
     },
   ]);
   const [stopKeywords, setStopKeywords] = useState<string>(DEFAULT_STOP_KEYWORDS);
+  const [faqItems, setFaqItems] = useState<KnowledgeBaseEntry[]>([
+    { q: "Quanto custa?", a: "A partir de R$ 97 por mês." },
+  ]);
+  const [prices, setPrices] = useState<string[]>(["Plano Mensal: R$ 97"]);
+  const [differentiators, setDifferentiators] = useState<string[]>(["Mensagens personalizadas com IA"]);
+  const [objections, setObjections] = useState<string[]>(["Não tenho tempo: o bot responde sozinho"]);
   const [flow, setFlow] = useState<Flow>(emptyFlow());
 
   useEffect(() => {
@@ -92,6 +111,13 @@ export function CampaignNewPage() {
         ...form,
         flow,
         chatbotRules: rules.filter((r) => r.pattern.trim() || r.reply.trim()),
+        chatbotKnowledgeBase: {
+          product: form.chatbotKnowledgeBase?.product ?? "",
+          faq: faqItems.filter((f) => f.q.trim() && f.a.trim()),
+          prices: prices.map((p) => p.trim()).filter(Boolean),
+          differentiators: differentiators.map((d) => d.trim()).filter(Boolean),
+          objections: objections.map((o) => o.trim()).filter(Boolean),
+        } as ChatbotKnowledgeBase,
         chatbotStopKeywords: stopKeywordsList,
       });
       toast("success", "Campanha criada com sucesso");
@@ -469,6 +495,185 @@ export function CampaignNewPage() {
                     ))}
                   </div>
 
+                  <div className="space-y-3 border-t border-ink-400 pt-4">
+                    <span className="label !mb-0">Modo do chatbot</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                          form.chatbotMode === "RULES"
+                            ? "border-gold-500 bg-gold-500/15 text-gold-400"
+                            : "border-ink-400 bg-ink-800 text-cream/60 hover:text-cream/90"
+                        }`}
+                        onClick={() => set("chatbotMode", "RULES")}
+                      >
+                        Regras
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                          form.chatbotMode === "LLM"
+                            ? "border-gold-500 bg-gold-500/15 text-gold-400"
+                            : "border-ink-400 bg-ink-800 text-cream/60 hover:text-cream/90"
+                        }`}
+                        onClick={() => set("chatbotMode", "LLM")}
+                      >
+                        IA (GPT-4o mini)
+                      </button>
+                    </div>
+                    <p className="text-xs text-cream/40">
+                      Regras: responde por correspondência de texto. IA: usa a base de conhecimento e
+                      o tom abaixo para responder com linguagem natural; quando não souber, transfere
+                      para um atendente humano.
+                    </p>
+                  </div>
+
+                  {form.chatbotMode === "LLM" && (
+                    <div className="space-y-4 rounded-lg border border-gold-500/30 bg-ink-800 p-4">
+                      <div>
+                        <label htmlFor="chatbotTone" className="label">
+                          Tom de voz
+                        </label>
+                        <input
+                          id="chatbotTone"
+                          className="input"
+                          placeholder="consultivo e profissional"
+                          value={form.chatbotTone ?? ""}
+                          onChange={(e) => set("chatbotTone", e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="kbProduct" className="label">
+                          O que você vende (produto/serviço)
+                        </label>
+                        <textarea
+                          id="kbProduct"
+                          className="input min-h-20 resize-y"
+                          maxLength={3000}
+                          placeholder="Ex: Software de automação de vendas B2B com IA."
+                          value={form.chatbotKnowledgeBase?.product ?? ""}
+                          onChange={(e) =>
+                            set("chatbotKnowledgeBase", {
+                              ...form.chatbotKnowledgeBase,
+                              product: e.target.value,
+                            } as ChatbotKnowledgeBase)
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="label !mb-0">Perguntas e respostas (FAQ)</span>
+                          <button
+                            type="button"
+                            className="btn btn-secondary !px-2.5 !py-1.5 text-xs"
+                            onClick={() => setFaqItems((f) => [...f, { q: "", a: "" }])}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Adicionar
+                          </button>
+                        </div>
+                        {faqItems.map((item, i) => (
+                          <div
+                            key={i}
+                            className="grid grid-cols-12 gap-2 rounded-lg border border-ink-400 bg-ink-900 p-3"
+                          >
+                            <input
+                              className="input col-span-5"
+                              placeholder="Pergunta"
+                              value={item.q}
+                              onChange={(e) => {
+                                const next = [...faqItems];
+                                next[i] = { ...next[i], q: e.target.value };
+                                setFaqItems(next);
+                              }}
+                              aria-label="Pergunta"
+                            />
+                            <input
+                              className="input col-span-6"
+                              placeholder="Resposta"
+                              value={item.a}
+                              onChange={(e) => {
+                                const next = [...faqItems];
+                                next[i] = { ...next[i], a: e.target.value };
+                                setFaqItems(next);
+                              }}
+                              aria-label="Resposta"
+                            />
+                            <button
+                              type="button"
+                              className="col-span-1 btn btn-danger !px-2 !py-2"
+                              onClick={() => setFaqItems((f) => f.filter((_, idx) => idx !== i))}
+                              aria-label="Remover FAQ"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div>
+                        <span className="label !mb-0">Lista de preços (um por linha)</span>
+                        <textarea
+                          className="input min-h-16 resize-y"
+                          placeholder={"Plano Mensal: R$ 97\nPlano Anual: R$ 900"}
+                          value={prices.join("\n")}
+                          onChange={(e) => setPrices(e.target.value.split("\n"))}
+                        />
+                      </div>
+
+                      <div>
+                        <span className="label !mb-0">Diferenciais (um por linha)</span>
+                        <textarea
+                          className="input min-h-16 resize-y"
+                          placeholder={"Mensagens personalizadas com IA\nSuporte em português"}
+                          value={differentiators.join("\n")}
+                          onChange={(e) => setDifferentiators(e.target.value.split("\n"))}
+                        />
+                      </div>
+
+                      <div>
+                        <span className="label !mb-0">Objeções (uma por linha)</span>
+                        <textarea
+                          className="input min-h-16 resize-y"
+                          placeholder={"Não tenho tempo: o bot responde sozinho no seu LinkedIn"}
+                          value={objections.join("\n")}
+                          onChange={(e) => setObjections(e.target.value.split("\n"))}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="transferMessage" className="label">
+                          Mensagem de transferência para humano
+                        </label>
+                        <textarea
+                          id="transferMessage"
+                          className="input min-h-20 resize-y"
+                          maxLength={1000}
+                          placeholder="Vou conectar você com um especialista do nosso time."
+                          value={form.chatbotTransferMessage ?? ""}
+                          onChange={(e) => set("chatbotTransferMessage", e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="chatbotMaxTurns" className="label">
+                          Máximo de turnos automáticos
+                        </label>
+                        <input
+                          id="chatbotMaxTurns"
+                          className="input"
+                          type="number"
+                          min={1}
+                          max={30}
+                          value={form.chatbotMaxTurns}
+                          onChange={(e) => set("chatbotMaxTurns", Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label htmlFor="defaultReply" className="label">
                       Resposta padrão (quando nenhuma regra corresponde)
@@ -555,6 +760,58 @@ export function CampaignNewPage() {
                         {k}
                       </span>
                     ))}
+                  </div>
+
+                  <div className="space-y-3 border-t border-ink-400 pt-4">
+                    <span className="label !mb-0">Mensagem inicial da conversa</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                          form.chatbotInitialMessageMode === "TEMPLATE"
+                            ? "border-gold-500 bg-gold-500/15 text-gold-400"
+                            : "border-ink-400 bg-ink-800 text-cream/60 hover:text-cream/90"
+                        }`}
+                        onClick={() => set("chatbotInitialMessageMode", "TEMPLATE")}
+                      >
+                        Template fixo
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                          form.chatbotInitialMessageMode === "AI"
+                            ? "border-gold-500 bg-gold-500/15 text-gold-400"
+                            : "border-ink-400 bg-ink-800 text-cream/60 hover:text-cream/90"
+                        }`}
+                        onClick={() => set("chatbotInitialMessageMode", "AI")}
+                      >
+                        Personalizar com IA
+                      </button>
+                    </div>
+                    {form.chatbotInitialMessageMode === "TEMPLATE" ? (
+                      <div>
+                        <label htmlFor="chatbotInitialTemplate" className="label">
+                          Template
+                        </label>
+                        <textarea
+                          id="chatbotInitialTemplate"
+                          className="input min-h-20 resize-y"
+                          maxLength={1000}
+                          placeholder="Olá {nome}! Vi o seu perfil e gostaria de conversar."
+                          value={form.chatbotInitialTemplate ?? ""}
+                          onChange={(e) => set("chatbotInitialTemplate", e.target.value)}
+                        />
+                        <p className="mt-1 text-xs text-cream/40">
+                          Deixe em branco para usar a mensagem de convite da campanha.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-cream/40">
+                        A IA escreve uma mensagem personalizada com base no perfil do lead e na base
+                        de conhecimento. Requer o modo IA ativo. Se falhar, usa a mensagem de
+                        convite como fallback.
+                      </p>
+                    )}
                   </div>
                 </>
               )}

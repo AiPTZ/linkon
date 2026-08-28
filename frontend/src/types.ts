@@ -97,6 +97,22 @@ export interface ChatbotRule {
   reply: string;
 }
 
+export interface KnowledgeBaseEntry {
+  q: string;
+  a: string;
+}
+
+export interface ChatbotKnowledgeBase {
+  product: string;
+  faq: KnowledgeBaseEntry[];
+  prices: string[];
+  differentiators: string[];
+  objections: string[];
+}
+
+export type ChatbotMode = "RULES" | "LLM";
+export type InitialMessageMode = "TEMPLATE" | "AI";
+
 export interface Campaign {
   id: string;
   name: string;
@@ -114,6 +130,13 @@ export interface Campaign {
   workEndHour: number;
   chatbotEnabled: boolean;
   chatbotRules: string;
+  chatbotMode: ChatbotMode;
+  chatbotKnowledgeBase: string;
+  chatbotTone: string;
+  chatbotInitialMessageMode: InitialMessageMode;
+  chatbotInitialTemplate: string;
+  chatbotTransferMessage: string;
+  chatbotMaxTurns: number;
   chatbotDefaultReply: string;
   chatbotReplyDelayMin: number;
   chatbotReplyDelayMax: number;
@@ -227,6 +250,13 @@ export interface CampaignPayload {
   workEndHour?: number;
   chatbotEnabled?: boolean;
   chatbotRules?: ChatbotRule[];
+  chatbotMode?: ChatbotMode;
+  chatbotKnowledgeBase?: ChatbotKnowledgeBase;
+  chatbotTone?: string;
+  chatbotInitialMessageMode?: InitialMessageMode;
+  chatbotInitialTemplate?: string;
+  chatbotTransferMessage?: string;
+  chatbotMaxTurns?: number;
   chatbotDefaultReply?: string;
   chatbotReplyDelayMin?: number;
   chatbotReplyDelayMax?: number;
