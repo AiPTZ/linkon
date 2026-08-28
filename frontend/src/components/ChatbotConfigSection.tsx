@@ -45,8 +45,8 @@ export function defaultChatbotConfig(): ChatbotConfig {
         reply: "Obrigado pelo interesse! Me conta o seu objetivo que eu te passo as melhores opções.",
       },
     ],
-    chatbotReplyDelayMin: 1,
-    chatbotReplyDelayMax: 3,
+    chatbotReplyDelayMin: 30,
+    chatbotReplyDelayMax: 30,
     chatbotStopKeywords: ["não quero", "sem interesse", "pare", "spam"],
     maxRepliesPerLead: 3,
   };
@@ -433,28 +433,28 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label htmlFor="replyDelayMin" className="label">
-                    Atraso min (min)
+                    Atraso min (s)
                   </label>
                   <input
                     id="replyDelayMin"
                     className="input"
                     type="number"
                     min={0}
-                    max={60}
+                    max={3600}
                     value={value.chatbotReplyDelayMin}
                     onChange={(e) => update({ chatbotReplyDelayMin: Number(e.target.value) })}
                   />
                 </div>
                 <div>
                   <label htmlFor="replyDelayMax" className="label">
-                    Atraso max (min)
+                    Atraso max (s)
                   </label>
                   <input
                     id="replyDelayMax"
                     className="input"
                     type="number"
                     min={0}
-                    max={120}
+                    max={7200}
                     value={value.chatbotReplyDelayMax}
                     onChange={(e) => update({ chatbotReplyDelayMax: Number(e.target.value) })}
                   />
