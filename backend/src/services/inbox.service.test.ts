@@ -33,6 +33,14 @@ describe("listInbox", () => {
     expect(arg.where).toEqual({ campaign: { userId: "U1" } });
     expect(arg.include.campaign.select).toMatchObject({ id: true, name: true, mode: true });
   });
+
+  it("admin sem x-operate-as (userId null) filtra conversas por userId null", async () => {
+    (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.conversation.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+    await listInbox(null);
+    const arg = (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(arg.where).toEqual({ campaign: { userId: null } });
+  });
 });
 
 describe("sendHumanMessage", () => {

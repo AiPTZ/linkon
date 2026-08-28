@@ -10,7 +10,7 @@ inboxRouter.get(
   "/",
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
-    res.json(await listInbox(userId ?? ""));
+    res.json(await listInbox(userId));
   }),
 );
 
@@ -18,7 +18,7 @@ inboxRouter.get(
   "/:id/messages",
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
-    res.json({ items: await listMessages(req.params.id, userId ?? "") });
+    res.json({ items: await listMessages(req.params.id, userId) });
   }),
 );
 
@@ -29,7 +29,7 @@ inboxRouter.post(
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
     const { text } = sendSchema.parse(req.body);
-    res.status(201).json(await sendHumanMessage(req.params.id, userId ?? "", text));
+    res.status(201).json(await sendHumanMessage(req.params.id, userId, text));
   }),
 );
 
@@ -37,6 +37,6 @@ inboxRouter.post(
   "/:id/claim",
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
-    res.json(await claimConversation(req.params.id, userId ?? ""));
+    res.json(await claimConversation(req.params.id, userId));
   }),
 );

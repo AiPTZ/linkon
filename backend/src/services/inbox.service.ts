@@ -13,7 +13,7 @@ interface InboxItem {
   unread: number;
 }
 
-export async function listInbox(userId: string): Promise<{
+export async function listInbox(userId: string | null): Promise<{
   items: InboxItem[];
   needsHuman: number;
 }> {
@@ -52,7 +52,7 @@ export async function listInbox(userId: string): Promise<{
   return { items, needsHuman };
 }
 
-async function assertAccess(conversationId: string, userId: string) {
+async function assertAccess(conversationId: string, userId: string | null) {
   const conv = await prisma.conversation.findFirst({
     where: { id: conversationId, campaign: { userId } },
   });
@@ -60,7 +60,7 @@ async function assertAccess(conversationId: string, userId: string) {
   return conv;
 }
 
-export async function listMessages(conversationId: string, userId: string): Promise<ConversationMessage[]> {
+export async function listMessages(conversationId: string, userId: string | null): Promise<ConversationMessage[]> {
   await assertAccess(conversationId, userId);
   return prisma.conversationMessage.findMany({
     where: { conversationId },
@@ -70,7 +70,7 @@ export async function listMessages(conversationId: string, userId: string): Prom
 
 export async function sendHumanMessage(
   conversationId: string,
-  userId: string,
+  userId: string | null,
   text: string,
 ): Promise<ConversationMessage> {
   const conv = await assertAccess(conversationId, userId);
@@ -90,7 +90,7 @@ export async function sendHumanMessage(
   return msg;
 }
 
-export async function claimConversation(conversationId: string, userId: string): Promise<{ ok: boolean }> {
+export async function claimConversation(conversationId: string, userId: string | null): Promise<{ ok: boolean }> {
   await assertAccess(conversationId, userId);
   await prisma.conversation.update({
     where: { id: conversationId },
