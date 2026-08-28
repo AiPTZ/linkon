@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Link2, Settings, ShieldCheck, UserPlus, X, Menu, Plus, LogOut, Home, Sun, Moon, Radar, ScanSearch, HelpCircle, type LucideIcon } from "lucide-react";
+import { Link2, Settings, ShieldCheck, UserPlus, X, Menu, Plus, LogOut, Home, Sun, Moon, Radar, ScanSearch, HelpCircle, Inbox, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Logo } from "./Logo";
 import { useAuth } from "../lib/auth";
@@ -14,6 +14,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     { to: "/", label: "Início", icon: Home, end: true },
     { to: "/campanhas", label: "Campanhas", icon: Link2 },
     { to: "/disparos", label: "Disparos", icon: Radar },
+    { to: "/inbox", label: "Inbox", icon: Inbox },
     { to: "/extracao", label: "Extração", icon: ScanSearch },
     { to: "/conectar", label: "Conta LinkedIn", icon: UserPlus },
     ...(isAdmin ? [{ to: "/administracao", label: "Administração", icon: ShieldCheck }] : []),

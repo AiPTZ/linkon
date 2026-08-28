@@ -318,3 +318,33 @@ export interface NotificationsResponse {
   items: Notification[];
   unread: number;
 }
+
+export type ConversationStatus = "BOT" | "NEEDS_HUMAN" | "HUMAN" | "CLOSED";
+export type MessageRole = "LEAD" | "BOT" | "HUMAN" | "SYSTEM";
+
+export interface ConversationSummary {
+  id: string;
+  status: ConversationStatus;
+  lastMessageAt: string;
+  lastMessage: string | null;
+  unread: number;
+  lead: { name: string | null; headline: string | null; profileUrl: string | null };
+  campaign: { id: string; name: string };
+}
+
+export interface InboxListResponse {
+  items: ConversationSummary[];
+  needsHuman: number;
+}
+
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  role: MessageRole;
+  content: string;
+  messageId: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  costUsd: number | null;
+  createdAt: string;
+}

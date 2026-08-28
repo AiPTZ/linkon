@@ -20,6 +20,7 @@ import { ConnectPage } from "./pages/ConnectPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AdminPage } from "./pages/AdminPage";
 import { TutorialPage } from "./pages/TutorialPage";
+import { InboxPage } from "./pages/InboxPage";
 
 function RequireAuth() {
   const { user, loading } = useAuth();
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/campanhas/:id" element={<CampaignDetailPage />} />
             <Route path="/campanhas/:id/fluxo" element={<FlowPage />} />
             <Route path="/conectar" element={<ConnectPage />} />
+            <Route path="/inbox" element={<InboxPage />} />
             <Route path="/disparos" element={<DisparosPage />} />
             <Route path="/disparos/nova" element={<DisparoNewPage />} />
             <Route path="/disparos/:id/selecionar" element={<DisparoSelectPage />} />
