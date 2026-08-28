@@ -22,7 +22,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval:chatbot": "tsx src/scripts/evaluate-chatbot.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
