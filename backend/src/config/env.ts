@@ -16,6 +16,9 @@ const envSchema = z.object({
   ADMIN_USERNAME: z.string().min(1).default("admin"),
   ADMIN_PASSWORD: z.string().min(6).default("admin"),
   WHATSAPP_SUPPORT: z.string().min(8).default("5519990041826"),
+  USER_LLM_API_KEY: z.string().optional().default(""),
+  USER_LLM_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  USER_LLM_MODEL: z.string().default("gpt-4o-mini"),
 });
 
 const parsed = envSchema.safeParse(process.env);
