@@ -47,7 +47,7 @@ export function defaultChatbotConfig(): ChatbotConfig {
     ],
     chatbotReplyDelayMin: 1,
     chatbotReplyDelayMax: 3,
-    chatbotStopKeywords: [],
+    chatbotStopKeywords: ["não quero", "sem interesse", "pare", "spam"],
     maxRepliesPerLead: 3,
   };
 }
@@ -57,7 +57,7 @@ export function sanitizeChatbotConfig(cfg: ChatbotConfig): ChatbotConfig {
   return {
     ...cfg,
     chatbotRules: cfg.chatbotRules.filter((r) => r.pattern.trim() || r.reply.trim()),
-    chatbotStopKeywords: cfg.chatbotStopKeywords.map((k) => k.trim()).filter(Boolean),
+    chatbotStopKeywords: [...new Set(cfg.chatbotStopKeywords.map((k) => k.trim()).filter(Boolean))],
     chatbotKnowledgeBase: {
       product: kb?.product ?? "",
       faq: (kb?.faq ?? []).filter((f) => f.q.trim() && f.a.trim()),
