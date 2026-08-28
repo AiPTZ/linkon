@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Bot,
   CheckCheck,
   Download,
   ExternalLink,
@@ -32,6 +33,14 @@ import { formatDateTime, LEAD_STATUS_LABEL, shortName } from "../lib/format";
 import { BLOCK_DEFS, parseFlow } from "../lib/flow";
 import { formatCountdown } from "../components/NextSendCountdown";
 import { useToast, toastFromError } from "../components/Toast";
+import { Modal } from "../components/Modal";
+import {
+  ChatbotConfigSection,
+  defaultChatbotConfig,
+  parseCampaignToChatbotConfig,
+  sanitizeChatbotConfig,
+} from "../components/ChatbotConfigSection";
+import type { ChatbotConfig } from "../types";
 
 type Tab = "leads" | "logs";
 
@@ -76,6 +85,9 @@ export function CampaignDetailPage() {
   const [logs, setLogs] = useState<Paginated<LogEvent> | null>(null);
 
   const [busy, setBusy] = useState<string | null>(null);
+  const [botOpen, setBotOpen] = useState(false);
+  const [botConfig, setBotConfig] = useState<ChatbotConfig>(() => defaultChatbotConfig());
+  const [savingBot, setSavingBot] = useState(false);
 
   const [contactStats, setContactStats] = useState<ContactScrapeStats | null>(null);
   const [scraping, setScraping] = useState(false);
@@ -211,6 +223,21 @@ export function CampaignDetailPage() {
     }
   }
 
+  async function onSaveBot() {
+    if (!campaign) return;
+    setSavingBot(true);
+    try {
+      await api.put(`/campaigns/${id}`, sanitizeChatbotConfig(botConfig));
+      toast("success", "Chatbot atualizado");
+      setBotOpen(false);
+      loadCampaign();
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setSavingBot(false);
+    }
+  }
+
   const stats = useMemo(() => {
     const s = campaign?.stats ?? {};
     return {
@@ -269,6 +296,17 @@ export function CampaignDetailPage() {
           >
             <Workflow className="h-4 w-4" />
             Fluxo
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setBotConfig(parseCampaignToChatbotConfig(campaign));
+              setBotOpen(true);
+            }}
+          >
+            <Bot className="h-4 w-4" />
+            Chatbot
           </button>
           {canSelect && (
             <button
@@ -625,6 +663,30 @@ export function CampaignDetailPage() {
           )}
         </div>
       )}
+
+      <Modal open={botOpen} onClose={() => setBotOpen(false)} title="Configurar chatbot">
+        <div className="space-y-4">
+          <ChatbotConfigSection
+            key={botOpen ? campaign.id : `${campaign.id}-closed`}
+            value={botConfig}
+            onChange={setBotConfig}
+          />
+          <div className="flex items-center justify-end gap-3">
+            <button type="button" className="btn btn-secondary" onClick={() => setBotOpen(false)}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={savingBot}
+              onClick={onSaveBot}
+            >
+              {savingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Salvar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
