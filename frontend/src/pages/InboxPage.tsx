@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Inbox, MessageCircle, Send, Bot } from "lucide-react";
+import { Inbox, MessageCircle, Send, Bot, UserCheck } from "lucide-react";
 import { api } from "../lib/api";
 import type { ConversationMessage, InboxListResponse } from "../types";
 import { formatDateTime, shortName } from "../lib/format";
@@ -53,6 +53,7 @@ export function InboxPage() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [filter, setFilter] = useState<InboxFilter>("ALL");
 
   const loadInbox = useCallback(() => {
@@ -85,7 +86,6 @@ export function InboxPage() {
 
   function selectConversation(id: string) {
     setSelectedId(id);
-    api.post(`/inbox/${id}/claim`).catch(() => {});
   }
 
   async function onSubmit(e: FormEvent) {
@@ -101,6 +101,21 @@ export function InboxPage() {
       toastFromError(toast, err);
     } finally {
       setSending(false);
+    }
+  }
+
+  async function onClaim() {
+    if (!selectedId) return;
+    setClaiming(true);
+    try {
+      await api.post(`/inbox/${selectedId}/claim`);
+      toast("success", "Conversa assumida por você.");
+      loadMessages(selectedId);
+      loadInbox();
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setClaiming(false);
     }
   }
 
@@ -220,7 +235,17 @@ export function InboxPage() {
                       {selected.lead.headline || selected.campaign.name}
                     </div>
                   </div>
-                  {selected.status !== "BOT" && (
+                  {selected.status === "BOT" ? (
+                    <button
+                      type="button"
+                      onClick={onClaim}
+                      disabled={claiming}
+                      className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-60"
+                    >
+                      {claiming ? <Spinner className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                      Assumir
+                    </button>
+                  ) : (
                     <button
                       type="button"
                       onClick={onReactivate}
