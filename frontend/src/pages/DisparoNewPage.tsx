@@ -11,9 +11,10 @@ import {
   Workflow,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Account, CampaignPayload, Flow } from "../types";
+import type { Account, CampaignPayload, ChatbotConfig, Flow } from "../types";
 import { FlowEditor } from "../components/FlowEditor";
 import { emptyFlow } from "../lib/flow";
+import { ChatbotConfigSection, defaultChatbotConfig, sanitizeChatbotConfig } from "../components/ChatbotConfigSection";
 import { PageLoader } from "../components/Spinner";
 import { useToast, toastFromError } from "../components/Toast";
 
@@ -40,6 +41,7 @@ export function DisparoNewPage() {
   });
   const [useFlow, setUseFlow] = useState(false);
   const [flow, setFlow] = useState<Flow>(emptyFlow());
+  const [chatbot, setChatbot] = useState<ChatbotConfig>(() => defaultChatbotConfig());
   const [flowOpen, setFlowOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -90,6 +92,7 @@ export function DisparoNewPage() {
         workStartHour: strategy.workStartHour,
         workEndHour: strategy.workEndHour,
         maxLeads: strategy.maxLeads,
+        ...sanitizeChatbotConfig(chatbot),
         flow: useFlow ? flow : undefined,
       };
       const created = await api.post<{ id: string }>("/campaigns", payload);
@@ -342,6 +345,8 @@ export function DisparoNewPage() {
             20–40 por dia) e intervalos de 5 a 15 minutos para proteger a conta de bloqueios.
           </p>
         </section>
+
+        <ChatbotConfigSection value={chatbot} onChange={setChatbot} title="Chatbot de respostas (opcional)" />
 
         <section className="card space-y-4 p-5">
           <h2 className="font-serif text-lg text-gold-400">Confirmar</h2>
