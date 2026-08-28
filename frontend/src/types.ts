@@ -113,6 +113,23 @@ export interface ChatbotKnowledgeBase {
 export type ChatbotMode = "RULES" | "LLM";
 export type InitialMessageMode = "TEMPLATE" | "AI";
 
+export interface ChatbotConfig {
+  chatbotEnabled: boolean;
+  chatbotMode: ChatbotMode;
+  chatbotKnowledgeBase: ChatbotKnowledgeBase;
+  chatbotTone: string;
+  chatbotInitialMessageMode: InitialMessageMode;
+  chatbotInitialTemplate: string;
+  chatbotTransferMessage: string;
+  chatbotMaxTurns: number;
+  chatbotDefaultReply: string;
+  chatbotRules: ChatbotRule[];
+  chatbotReplyDelayMin: number;
+  chatbotReplyDelayMax: number;
+  chatbotStopKeywords: string[];
+  maxRepliesPerLead: number;
+}
+
 export interface Campaign {
   id: string;
   name: string;
