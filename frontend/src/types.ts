@@ -346,7 +346,7 @@ export interface ConversationSummary {
   lastMessage: string | null;
   unread: number;
   lead: { name: string | null; headline: string | null; profileUrl: string | null };
-  campaign: { id: string; name: string };
+  campaign: { id: string; name: string; mode: "SEARCH" | "SWEEP" | "DISPARO" };
 }
 
 export interface InboxListResponse {

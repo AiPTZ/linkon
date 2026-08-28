@@ -15,6 +15,14 @@ const CONVERSATION_LABEL: Record<string, string> = {
 
 const REFRESH_MS = 8_000;
 
+type InboxFilter = "ALL" | "DISPARO" | "CONVITE";
+
+const FILTER_TABS: { key: InboxFilter; label: string }[] = [
+  { key: "ALL", label: "Todas" },
+  { key: "DISPARO", label: "Disparos" },
+  { key: "CONVITE", label: "Convites" },
+];
+
 function roleColor(role: ConversationMessage["role"]): string {
   switch (role) {
     case "LEAD":
@@ -44,6 +52,7 @@ export function InboxPage() {
   const [messages, setMessages] = useState<ConversationMessage[] | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [filter, setFilter] = useState<InboxFilter>("ALL");
 
   const loadInbox = useCallback(() => {
     api
@@ -98,6 +107,12 @@ export function InboxPage() {
 
   const selected = inbox.items.find((c) => c.id === selectedId) ?? null;
 
+  const items = inbox.items.filter((c) => {
+    if (filter === "ALL") return true;
+    const isDisparo = c.campaign.mode === "DISPARO";
+    return filter === "DISPARO" ? isDisparo : !isDisparo;
+  });
+
   return (
     <div className="space-y-4">
       <div>
@@ -108,17 +123,33 @@ export function InboxPage() {
             <span className="text-gold-400">{inbox.needsHuman} aguardando atendimento.</span>
           )}
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {FILTER_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                filter === t.key
+                  ? "border-gold-500 bg-gold-500/15 text-gold-400"
+                  : "border-ink-400 bg-ink-800 text-cream/50 hover:text-cream/80"
+              }`}
+              onClick={() => setFilter(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         <div className="card max-h-[70vh] overflow-y-auto p-3">
-          {inbox.items.length === 0 && (
+          {items.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-10 text-center text-cream/40">
               <Inbox className="h-8 w-8" />
               <span className="text-sm">Nenhuma conversa ainda.</span>
             </div>
           )}
-          {inbox.items.map((c) => (
+          {items.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -137,12 +168,23 @@ export function InboxPage() {
                 <div className="truncate text-xs text-cream/45">{c.lead.headline || c.campaign.name}</div>
                 <div className="mt-1 truncate text-xs text-cream/60">{c.lastMessage}</div>
               </div>
-              <span
-                className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.status === "NEEDS_HUMAN" ? "bg-amber-500/15 text-amber-400" : "bg-ink-500 text-cream/50"}`}
-              >
-                {CONVERSATION_LABEL[c.status] ?? c.status}
-                {c.unread > 0 && ` · ${c.unread}`}
-              </span>
+              <div className="flex flex-col items-end gap-1">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    c.campaign.mode === "DISPARO"
+                      ? "bg-sky-500/15 text-sky-400"
+                      : "bg-ink-500 text-cream/50"
+                  }`}
+                >
+                  {c.campaign.mode === "DISPARO" ? "Disparo" : "Convite"}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.status === "NEEDS_HUMAN" ? "bg-amber-500/15 text-amber-400" : "bg-ink-500 text-cream/50"}`}
+                >
+                  {CONVERSATION_LABEL[c.status] ?? c.status}
+                  {c.unread > 0 && ` · ${c.unread}`}
+                </span>
+              </div>
             </button>
           ))}
         </div>
