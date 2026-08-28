@@ -19,7 +19,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("listInbox", () => {
   it("lista conversas do usuário com status NEEDS_HUMAN primeiro", async () => {
     (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "CV1", status: "NEEDS_HUMAN", lastMessageAt: new Date(), lead: { name: "João", headline: "CEO", profileUrl: null }, campaign: { id: "C1", name: "Tech" } },
+      { id: "CV1", status: "NEEDS_HUMAN", lastMessageAt: new Date(), lead: { name: "João", headline: "CEO", profileUrl: null }, campaign: { id: "C1", name: "Tech", mode: "DISPARO" } },
     ]);
     (prisma.conversation.count as ReturnType<typeof vi.fn>).mockResolvedValue(1);
     (prisma.conversationMessage.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ content: "oi", role: "LEAD" });
@@ -31,6 +31,7 @@ describe("listInbox", () => {
     expect(res.needsHuman).toBe(1);
     const arg = (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(arg.where).toEqual({ campaign: { userId: "U1" } });
+    expect(arg.include.campaign.select).toMatchObject({ id: true, name: true, mode: true });
   });
 });
 

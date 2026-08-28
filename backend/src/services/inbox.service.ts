@@ -8,7 +8,7 @@ interface InboxItem {
   status: string;
   lastMessageAt: Date;
   lead: { name: string | null; headline: string | null; profileUrl: string | null };
-  campaign: { id: string; name: string };
+  campaign: { id: string; name: string; mode: string };
   lastMessage: string | null;
   unread: number;
 }
@@ -23,7 +23,7 @@ export async function listInbox(userId: string): Promise<{
       orderBy: [{ status: "asc" }, { lastMessageAt: "desc" }],
       include: {
         lead: { select: { name: true, headline: true, profileUrl: true } },
-        campaign: { select: { id: true, name: true } },
+        campaign: { select: { id: true, name: true, mode: true } },
       },
     }),
     prisma.conversation.count({ where: { campaign: { userId }, status: "NEEDS_HUMAN" } }),
