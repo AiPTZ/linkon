@@ -5,7 +5,11 @@ import { api } from "../lib/api";
 import type { Account, CampaignPayload, ChatbotConfig, Flow } from "../types";
 import { FlowEditor } from "../components/FlowEditor";
 import { emptyFlow } from "../lib/flow";
-import { ChatbotConfigSection, defaultChatbotConfig } from "../components/ChatbotConfigSection";
+import {
+  ChatbotConfigSection,
+  defaultChatbotConfig,
+  sanitizeChatbotConfig,
+} from "../components/ChatbotConfigSection";
 import { useToast, toastFromError } from "../components/Toast";
 import { PageLoader } from "../components/Spinner";
 
@@ -65,7 +69,7 @@ export function CampaignNewPage() {
     try {
       const created = await api.post<{ id: string }>("/campaigns", {
         ...form,
-        ...chatbot,
+        ...sanitizeChatbotConfig(chatbot),
         flow,
       });
       toast("success", "Campanha criada com sucesso");

@@ -52,6 +52,22 @@ export function defaultChatbotConfig(): ChatbotConfig {
   };
 }
 
+export function sanitizeChatbotConfig(cfg: ChatbotConfig): ChatbotConfig {
+  const kb = cfg.chatbotKnowledgeBase;
+  return {
+    ...cfg,
+    chatbotRules: cfg.chatbotRules.filter((r) => r.pattern.trim() || r.reply.trim()),
+    chatbotStopKeywords: cfg.chatbotStopKeywords.map((k) => k.trim()).filter(Boolean),
+    chatbotKnowledgeBase: {
+      product: kb?.product ?? "",
+      faq: (kb?.faq ?? []).filter((f) => f.q.trim() && f.a.trim()),
+      prices: (kb?.prices ?? []).map((p) => p.trim()).filter(Boolean),
+      differentiators: (kb?.differentiators ?? []).map((d) => d.trim()).filter(Boolean),
+      objections: (kb?.objections ?? []).map((o) => o.trim()).filter(Boolean),
+    },
+  };
+}
+
 function parseJsonObject<T extends object>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
   try {
