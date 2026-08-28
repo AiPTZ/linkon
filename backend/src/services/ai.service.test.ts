@@ -77,6 +77,7 @@ describe("buildSystemPrompt", () => {
     expect(p).toContain("R$ 97");
     expect(p).toContain("João");
     expect(p).toContain("canAnswer: false");
+    expect(p).toContain('"transfer": true ou false');
     expect(p).toContain("Vou te conectar com um especialista.");
   });
 });
@@ -116,6 +117,22 @@ describe("generateDecision", () => {
     });
     expect(d.canAnswer).toBe(false);
     expect(d.reply).toBe("Vou transferir.");
+    expect(d.transfer).toBe(true);
+  });
+
+  it("marca transfer true quando a IA decide transferir o lead", async () => {
+    mockOpenAi('{"reply":"Vou transferir.","canAnswer":true,"confidence":0.9,"transfer":true}');
+    const d = await generateDecision({
+      campaignName: "C",
+      knowledgeBase: KB,
+      tone: "consultivo",
+      history: [],
+      message: "quero falar com alguém agora",
+      transferMessage: "Vou transferir.",
+    });
+    expect(d.canAnswer).toBe(true);
+    expect(d.reply).toBe("Vou transferir.");
+    expect(d.transfer).toBe(true);
   });
 
   it("lança erro quando o JSON não é válido", async () => {

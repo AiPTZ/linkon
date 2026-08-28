@@ -11,7 +11,7 @@ vi.mock("./unipile.service", () => ({ unipile: { sendChatMessage: vi.fn() } }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { listInbox, sendHumanMessage, claimConversation } from "./inbox.service";
+import { listInbox, sendHumanMessage, claimConversation, reactivateConversation } from "./inbox.service";
 import { ApiError } from "../utils/errors";
 
 beforeEach(() => vi.clearAllMocks());
@@ -73,5 +73,22 @@ describe("claimConversation", () => {
     expect(res.ok).toBe(true);
     const upd = (prisma.conversation.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(upd.data.status).toBe("HUMAN");
+  });
+});
+
+describe("reactivateConversation", () => {
+  it("reativa a IA voltando a conversa para BOT", async () => {
+    (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CV1", accountId: "A1", unipileChatId: "CHAT1" });
+    const res = await reactivateConversation("CV1", "U1");
+    expect(res.ok).toBe(true);
+    const upd = (prisma.conversation.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(upd.where.id).toBe("CV1");
+    expect(upd.data.status).toBe("BOT");
+  });
+
+  it("lança 404 quando a conversa não é do usuário", async () => {
+    (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    await expect(reactivateConversation("CV1", "U1")).rejects.toThrow(ApiError);
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
   });
 });

@@ -16,6 +16,10 @@ import type { Campaign, Lead, Conversation } from "@prisma/client";
 
 export type BotAction = "reply" | "transfer" | "ignore" | "none";
 
+export function isConversationLocked(status: string): boolean {
+  return status === "NEEDS_HUMAN" || status === "HUMAN" || status === "CLOSED";
+}
+
 export async function getOrCreateConversation(input: {
   campaignId: string;
   leadId: string;
@@ -130,6 +134,18 @@ export async function handleIncomingMessage(input: {
 
   await recordMessage({ conversationId: conversation.id, role: "LEAD", content: input.message });
 
+  if (isConversationLocked(conversation.status)) {
+    await createLog({
+      type: "MESSAGE_RECEIVED",
+      message: `Resposta de ${lead.name ?? lead.providerId} ignorada (conversa em atendimento humano)`,
+      campaignId: campaign.id,
+      leadId: lead.id,
+      accountId: account.id,
+      payload: { message: input.message },
+    });
+    return "ignore";
+  }
+
   const stopKeywords = parseKeywords(campaign.chatbotStopKeywords);
   if (containsStopKeyword(input.message, stopKeywords)) {
     await createLog({
@@ -208,6 +224,18 @@ export async function handleIncomingMessage(input: {
       chatId: input.chatId,
       conversationId: conversation.id,
       reason: decision.confidence < CONFIDENCE_THRESHOLD ? "confiança baixa" : "fora da base de conhecimento",
+    });
+    return "transfer";
+  }
+
+  if (decision.transfer) {
+    await transferToHuman({
+      campaignId: campaign.id,
+      leadId: lead.id,
+      accountId: account.id,
+      chatId: input.chatId,
+      conversationId: conversation.id,
+      reason: "lead pronto para atendimento humano",
     });
     return "transfer";
   }

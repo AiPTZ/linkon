@@ -19,7 +19,7 @@ vi.mock("./notification.service", () => ({ notify: vi.fn() }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { handleIncomingMessage, getOrCreateConversation, transferToHuman, resolveInitialMessage } from "./chatbot-ai.service";
+import { handleIncomingMessage, getOrCreateConversation, transferToHuman, resolveInitialMessage, isConversationLocked } from "./chatbot-ai.service";
 
 const campaign = {
   id: "C1",
@@ -103,6 +103,7 @@ describe("handleIncomingMessage", () => {
       reply: "A partir de R$ 97/mês.",
       canAnswer: true,
       confidence: 0.9,
+      transfer: false,
       tokensIn: 100,
       tokensOut: 50,
     });
@@ -136,6 +137,7 @@ describe("handleIncomingMessage", () => {
       reply: "Vou te conectar com um especialista.",
       canAnswer: false,
       confidence: 0.1,
+      transfer: false,
       tokensIn: 100,
       tokensOut: 50,
     });
@@ -149,6 +151,36 @@ describe("handleIncomingMessage", () => {
     expect(action).toBe("transfer");
   });
 
+  it("transfere para humano quando a IA decide transfer true (lead pronto)", async () => {
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(campaign);
+    (prisma.lead.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(lead);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.conversation.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1" });
+    (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (unipile.sendChatMessage as ReturnType<typeof vi.fn>).mockResolvedValue({ message_id: "M1" });
+
+    const aiModule = await import("./ai.service");
+    vi.spyOn(aiModule, "generateDecision").mockResolvedValue({
+      reply: "Vou te conectar com um especialista.",
+      canAnswer: true,
+      confidence: 0.9,
+      transfer: true,
+      tokensIn: 100,
+      tokensOut: 50,
+    });
+
+    const action = await handleIncomingMessage({
+      campaignId: "C1",
+      leadId: "L1",
+      chatId: "CHAT1",
+      message: "quero agendar a demo, meu whats é 19 9999-0000",
+    });
+    expect(action).toBe("transfer");
+    expect(unipile.sendChatMessage).toHaveBeenCalledWith("CHAT1", "Vou te conectar com um especialista.");
+    const convUpdate = (prisma.conversation.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(convUpdate.data.status).toBe("NEEDS_HUMAN");
+  });
+
   it("ignora mensagem com palavra de parada", async () => {
     (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(campaign);
     (prisma.lead.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(lead);
@@ -160,6 +192,58 @@ describe("handleIncomingMessage", () => {
       message: "não quero mais contato",
     });
     expect(action).toBe("ignore");
+  });
+
+  it("retorna ignore e não chama o LLM quando a conversa está travada (NEEDS_HUMAN)", async () => {
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(campaign);
+    (prisma.lead.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(lead);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.conversation.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "NEEDS_HUMAN" });
+
+    const aiModule = await import("./ai.service");
+    const spy = vi.spyOn(aiModule, "generateDecision").mockResolvedValue({
+      reply: "X",
+      canAnswer: true,
+      confidence: 0.9,
+      transfer: false,
+      tokensIn: 0,
+      tokensOut: 0,
+    });
+
+    const action = await handleIncomingMessage({
+      campaignId: "C1",
+      leadId: "L1",
+      chatId: "CHAT1",
+      message: "olá?",
+    });
+    expect(action).toBe("ignore");
+    expect(spy).not.toHaveBeenCalled();
+    expect(unipile.sendChatMessage).not.toHaveBeenCalled();
+    const msgCreate = (prisma.conversationMessage.create as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(msgCreate.data.role).toBe("LEAD");
+  });
+
+  it("retorna ignore quando a conversa está travada (HUMAN)", async () => {
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(campaign);
+    (prisma.lead.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(lead);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.conversation.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "HUMAN" });
+
+    const action = await handleIncomingMessage({
+      campaignId: "C1",
+      leadId: "L1",
+      chatId: "CHAT1",
+      message: "e aí?",
+    });
+    expect(action).toBe("ignore");
+    expect(unipile.sendChatMessage).not.toHaveBeenCalled();
+  });
+
+  it("considera NEEDS_HUMAN, HUMAN e CLOSED como conversa travada", () => {
+    expect(isConversationLocked("NEEDS_HUMAN")).toBe(true);
+    expect(isConversationLocked("HUMAN")).toBe(true);
+    expect(isConversationLocked("CLOSED")).toBe(true);
+    expect(isConversationLocked("BOT")).toBe(false);
   });
 
   it("transfere quando o limite de turnos é atingido", async () => {

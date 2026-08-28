@@ -3,6 +3,8 @@ import { prisma } from "../lib/prisma";
 import { chatbotQueue } from "../services/queue.service";
 import { createLog } from "../services/log.service";
 import { advanceOnEvent, hasFlow } from "../services/flow.service";
+import { unipile } from "../services/unipile.service";
+import { recordMessage, isConversationLocked } from "../services/chatbot-ai.service";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { randomInt } from "../utils/time";
@@ -29,7 +31,32 @@ export interface WebhookLeadCandidate {
   id: string;
   campaignId: string;
   createdAt: Date;
+  providerId?: string;
+  name?: string | null;
+  headline?: string | null;
   campaign: { status: string; chatbotEnabled: boolean };
+}
+
+async function syncLeadNameFromProfile(input: {
+  accountId: string;
+  lead: { id: string; providerId: string; name?: string | null; headline?: string | null };
+}): Promise<void> {
+  try {
+    const account = await prisma.account.findUnique({ where: { id: input.accountId } });
+    if (!account) return;
+    const profile = await unipile.getProfile(account.unipileAccountId, input.lead.providerId);
+    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim() || null;
+    if (!fullName) return;
+    await prisma.lead.update({
+      where: { id: input.lead.id },
+      data: {
+        name: fullName,
+        ...(input.lead.headline ? {} : { headline: profile.headline ?? null }),
+      },
+    });
+  } catch (err) {
+    logger.warn(`[webhook] falha ao sincronizar nome do lead do perfil: ${(err as Error).message}`);
+  }
 }
 
 export function pickBestLead<T extends WebhookLeadCandidate>(leads: T[]): T | null {
@@ -56,6 +83,10 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
   const campaign = await prisma.campaign.findUnique({ where: { id: lead.campaignId } });
   if (!campaign) return;
 
+  if (lead.providerId && (!lead.name || lead.name === lead.providerId)) {
+    await syncLeadNameFromProfile({ accountId: campaign.accountId, lead: lead as never });
+  }
+
   const text = typeof event.message === "string" ? event.message.slice(0, 1000) : "";
   await prisma.lead.update({
     where: { id: lead.id },
@@ -76,6 +107,29 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
   await advanceOnEvent(campaign, { ...lead, status: "RESPONDED" });
 
   if (!campaign.chatbotEnabled || hasFlow(campaign.flow) || !text || !event.chat_id) return;
+
+  if (event.chat_id) {
+    const existing = await prisma.conversation.findUnique({
+      where: { unipileChatId: event.chat_id },
+    });
+    if (existing && isConversationLocked(existing.status)) {
+      if (text) {
+        await recordMessage({ conversationId: existing.id, role: "LEAD", content: text });
+      }
+      await prisma.conversation.update({
+        where: { id: existing.id },
+        data: { lastMessageAt: new Date() },
+      });
+      await createLog({
+        type: "MESSAGE_RECEIVED",
+        message: `Mensagem de ${event.sender?.name || senderId} ignorada pelo bot (conversa em atendimento humano)`,
+        campaignId: lead.campaignId,
+        leadId: lead.id,
+        payload: { chatId: event.chat_id, message: text },
+      });
+      return;
+    }
+  }
 
   const delay = randomInt(
     campaign.chatbotReplyDelayMin * 1000,
@@ -112,6 +166,13 @@ async function handleNewRelation(event: RelationWebhook): Promise<void> {
 
   const campaign = await prisma.campaign.findUnique({ where: { id: lead.campaignId } });
   if (!campaign) return;
+
+  if (event.user_full_name && event.user_full_name !== lead.name) {
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { name: event.user_full_name },
+    });
+  }
 
   await prisma.lead.update({
     where: { id: lead.id },

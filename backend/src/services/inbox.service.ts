@@ -98,3 +98,15 @@ export async function claimConversation(conversationId: string, userId: string |
   });
   return { ok: true };
 }
+
+export async function reactivateConversation(
+  conversationId: string,
+  userId: string | null,
+): Promise<{ ok: boolean }> {
+  await assertAccess(conversationId, userId);
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { status: "BOT" },
+  });
+  return { ok: true };
+}

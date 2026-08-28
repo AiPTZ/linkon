@@ -8,7 +8,7 @@ import {
   parseKeywords,
 } from "../services/chatbot.service";
 import { createLog } from "../services/log.service";
-import { handleIncomingMessage } from "../services/chatbot-ai.service";
+import { handleIncomingMessage, isConversationLocked } from "../services/chatbot-ai.service";
 import { logger } from "../utils/logger";
 import type { ChatbotJob } from "../services/queue.service";
 
@@ -26,6 +26,18 @@ const worker = new Worker(
 
     if (campaign.chatbotMode === "LLM") {
       await handleIncomingMessage({ campaignId, leadId, chatId, message });
+      return;
+    }
+
+    const conv = await prisma.conversation.findUnique({ where: { unipileChatId: chatId } });
+    if (conv && isConversationLocked(conv.status)) {
+      await createLog({
+        type: "MESSAGE_RECEIVED",
+        message: `Resposta de ${lead.name ?? lead.providerId} ignorada (conversa em atendimento humano)`,
+        campaignId,
+        leadId,
+        payload: { message },
+      });
       return;
     }
 

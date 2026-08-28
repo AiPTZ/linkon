@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Inbox, MessageCircle, Send } from "lucide-react";
+import { Inbox, MessageCircle, Send, Bot } from "lucide-react";
 import { api } from "../lib/api";
 import type { ConversationMessage, InboxListResponse } from "../types";
 import { formatDateTime, shortName } from "../lib/format";
@@ -52,6 +52,7 @@ export function InboxPage() {
   const [messages, setMessages] = useState<ConversationMessage[] | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
   const [filter, setFilter] = useState<InboxFilter>("ALL");
 
   const loadInbox = useCallback(() => {
@@ -62,7 +63,6 @@ export function InboxPage() {
   }, []);
 
   const loadMessages = useCallback((conversationId: string) => {
-    setMessages(null);
     api
       .get<{ items: ConversationMessage[] }>(`/inbox/${conversationId}/messages`)
       .then((r) => setMessages(r.items))
@@ -77,6 +77,7 @@ export function InboxPage() {
 
   useEffect(() => {
     if (!selectedId) return;
+    setMessages(null);
     loadMessages(selectedId);
     const t = setInterval(() => loadMessages(selectedId), REFRESH_MS);
     return () => clearInterval(t);
@@ -100,6 +101,21 @@ export function InboxPage() {
       toastFromError(toast, err);
     } finally {
       setSending(false);
+    }
+  }
+
+  async function onReactivate() {
+    if (!selectedId) return;
+    setReactivating(true);
+    try {
+      await api.post(`/inbox/${selectedId}/reactivate`);
+      toast("success", "IA reativada nesta conversa.");
+      loadMessages(selectedId);
+      loadInbox();
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setReactivating(false);
     }
   }
 
@@ -197,8 +213,25 @@ export function InboxPage() {
           ) : (
             <>
               <div className="border-b border-ink-400 px-4 py-3">
-                <div className="font-medium text-cream">{shortName(selected.lead.name, "Lead")}</div>
-                <div className="text-xs text-cream/45">{selected.lead.headline || selected.campaign.name}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium text-cream">{shortName(selected.lead.name, "Lead")}</div>
+                    <div className="truncate text-xs text-cream/45">
+                      {selected.lead.headline || selected.campaign.name}
+                    </div>
+                  </div>
+                  {selected.status !== "BOT" && (
+                    <button
+                      type="button"
+                      onClick={onReactivate}
+                      disabled={reactivating}
+                      className="flex items-center gap-1.5 rounded-full border border-gold-500/40 bg-gold-500/10 px-3 py-1 text-xs font-medium text-gold-300 transition-colors hover:bg-gold-500/20 disabled:opacity-60"
+                    >
+                      {reactivating ? <Spinner className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+                      Reativar IA
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 space-y-2 overflow-y-auto p-4">

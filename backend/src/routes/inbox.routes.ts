@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { resolveScope } from "../utils/scope";
-import { listInbox, listMessages, sendHumanMessage, claimConversation } from "../services/inbox.service";
+import { listInbox, listMessages, sendHumanMessage, claimConversation, reactivateConversation } from "../services/inbox.service";
 import { ah } from "./handler";
 
 export const inboxRouter = Router();
@@ -38,5 +38,13 @@ inboxRouter.post(
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
     res.json(await claimConversation(req.params.id, userId));
+  }),
+);
+
+inboxRouter.post(
+  "/:id/reactivate",
+  ah(async (req, res) => {
+    const { userId } = resolveScope(req);
+    res.json(await reactivateConversation(req.params.id, userId));
   }),
 );
