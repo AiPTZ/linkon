@@ -8,6 +8,7 @@ import {
   parseKeywords,
 } from "../services/chatbot.service";
 import { createLog } from "../services/log.service";
+import { handleIncomingMessage } from "../services/chatbot-ai.service";
 import { logger } from "../utils/logger";
 import type { ChatbotJob } from "../services/queue.service";
 
@@ -22,6 +23,11 @@ const worker = new Worker(
     ]);
     if (!campaign || !lead) return;
     if (!campaign.chatbotEnabled) return;
+
+    if (campaign.chatbotMode === "LLM") {
+      await handleIncomingMessage({ campaignId, leadId, chatId, message });
+      return;
+    }
 
     const stopKeywords = parseKeywords(campaign.chatbotStopKeywords);
     if (containsStopKeyword(message, stopKeywords)) {
