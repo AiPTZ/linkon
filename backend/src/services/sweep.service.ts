@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
 import { createLog } from "./log.service";
 import { notify } from "./notification.service";
+import { resolveInitialMessage } from "./chatbot-ai.service";
 import { sleep, randomInt } from "../utils/time";
 import { UnipileError } from "../utils/errors";
 import type { Campaign, Lead } from "@prisma/client";
@@ -102,7 +103,7 @@ export async function sendSweepMessage(campaign: Campaign, lead: Lead): Promise<
     throw new Error(`Account ${campaign.accountId} nao encontrada`);
   }
 
-  const text = (campaign.inviteMessage ?? "").trim();
+  const text = (await resolveInitialMessage(campaign, lead)).trim();
   if (!text) {
     throw new Error("Mensagem de varredura vazia");
   }

@@ -19,7 +19,7 @@ vi.mock("./notification.service", () => ({ notify: vi.fn() }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { handleIncomingMessage, getOrCreateConversation, transferToHuman } from "./chatbot-ai.service";
+import { handleIncomingMessage, getOrCreateConversation, transferToHuman, resolveInitialMessage } from "./chatbot-ai.service";
 
 const campaign = {
   id: "C1",
@@ -181,5 +181,49 @@ describe("handleIncomingMessage", () => {
     (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     const action = await handleIncomingMessage({ campaignId: "C9", leadId: "L1", chatId: "C", message: "oi" });
     expect(action).toBe("none");
+  });
+});
+
+describe("resolveInitialMessage", () => {
+  it("retorna inviteMessage em modo RULES sem chamar o LLM", async () => {
+    const aiModule = await import("./ai.service");
+    const spy = vi.spyOn(aiModule, "generateInitialMessage").mockResolvedValue({ text: "X", tokensIn: 0, tokensOut: 0 });
+    const out = await resolveInitialMessage(
+      { ...(campaign as Record<string, unknown>), chatbotMode: "RULES", inviteMessage: "Olá da rede!" } as never,
+      lead as never,
+    );
+    expect(out).toBe("Olá da rede!");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("retorna inviteMessage em modo LLM+TEMPLATE sem chamar o LLM", async () => {
+    const aiModule = await import("./ai.service");
+    const spy = vi.spyOn(aiModule, "generateInitialMessage").mockResolvedValue({ text: "X", tokensIn: 0, tokensOut: 0 });
+    const out = await resolveInitialMessage(
+      { ...(campaign as Record<string, unknown>), chatbotMode: "LLM", chatbotInitialMessageMode: "TEMPLATE", inviteMessage: "Olá da rede!" } as never,
+      lead as never,
+    );
+    expect(out).toBe("Olá da rede!");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("gera mensagem personalizada em modo LLM+AI", async () => {
+    const aiModule = await import("./ai.service");
+    vi.spyOn(aiModule, "generateInitialMessage").mockResolvedValue({ text: "Oi João, bora conversar?", tokensIn: 50, tokensOut: 20 });
+    const out = await resolveInitialMessage(
+      { ...(campaign as Record<string, unknown>), chatbotMode: "LLM", chatbotInitialMessageMode: "AI", chatbotInitialTemplate: "Template base", inviteMessage: "" } as never,
+      lead as never,
+    );
+    expect(out).toBe("Oi João, bora conversar?");
+  });
+
+  it("cai para inviteMessage quando o LLM falha", async () => {
+    const aiModule = await import("./ai.service");
+    vi.spyOn(aiModule, "generateInitialMessage").mockRejectedValue(new Error("falha"));
+    const out = await resolveInitialMessage(
+      { ...(campaign as Record<string, unknown>), chatbotMode: "LLM", chatbotInitialMessageMode: "AI", chatbotInitialTemplate: "T", inviteMessage: "Olá da rede!" } as never,
+      lead as never,
+    );
+    expect(out).toBe("Olá da rede!");
   });
 });

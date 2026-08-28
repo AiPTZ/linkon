@@ -4,13 +4,15 @@ import { createLog } from "./log.service";
 import { notify } from "./notification.service";
 import {
   generateDecision,
+  generateInitialMessage,
   parseKnowledgeBase,
   isJailbreak,
   estimateCost,
   CONFIDENCE_THRESHOLD,
 } from "./ai.service";
 import { containsStopKeyword, parseKeywords } from "./chatbot.service";
-import type { Conversation } from "@prisma/client";
+import { logger } from "../utils/logger";
+import type { Campaign, Lead, Conversation } from "@prisma/client";
 
 export type BotAction = "reply" | "transfer" | "ignore" | "none";
 
@@ -248,5 +250,40 @@ export async function handleIncomingMessage(input: {
       payload: { reply: decision.reply },
     });
     return "transfer";
+  }
+}
+
+export async function resolveInitialMessage(
+  campaign: Pick<
+    Campaign,
+    | "name"
+    | "chatbotMode"
+    | "chatbotInitialMessageMode"
+    | "chatbotInitialTemplate"
+    | "chatbotKnowledgeBase"
+    | "chatbotTone"
+    | "inviteMessage"
+  >,
+  lead: Pick<Lead, "name" | "headline">,
+): Promise<string> {
+  const fallback = (campaign.inviteMessage ?? "").trim();
+  if (campaign.chatbotMode !== "LLM" || campaign.chatbotInitialMessageMode !== "AI") {
+    return fallback;
+  }
+  if (!fallback && !campaign.chatbotInitialTemplate) return fallback;
+  try {
+    const kb = parseKnowledgeBase(campaign.chatbotKnowledgeBase);
+    const out = await generateInitialMessage({
+      campaignName: campaign.name,
+      tone: campaign.chatbotTone || "consultivo e profissional",
+      template: campaign.chatbotInitialTemplate || fallback,
+      leadName: lead.name,
+      leadHeadline: lead.headline,
+      product: kb.product || campaign.name,
+    });
+    return out.text.trim() || fallback;
+  } catch (err) {
+    logger.warn("resolveInitialMessage: falha ao gerar, usando mensagem padrão", err);
+    return fallback;
   }
 }

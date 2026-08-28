@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
 import { createLog } from "./log.service";
+import { resolveInitialMessage } from "./chatbot-ai.service";
 import { startOfLocalDay, startOfLocalWeek } from "../utils/time";
 import { UnipileError } from "../utils/errors";
 import type { Campaign, Lead } from "@prisma/client";
@@ -38,10 +39,11 @@ export async function sendInvitation(campaign: Campaign, lead: Lead): Promise<vo
   }
 
   try {
+    const message = await resolveInitialMessage(campaign, lead);
     const res = await unipile.sendInvitation(
       account.unipileAccountId,
       lead.providerId,
-      campaign.inviteMessage || undefined,
+      message || undefined,
     );
 
     await prisma.lead.update({
