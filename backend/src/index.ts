@@ -11,7 +11,18 @@ import { logger } from "./utils/logger";
 const app = express();
 
 app.use(cors({ origin: true, credentials: true }));
+
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  const chunks: Buffer[] = [];
+  req.on("data", (c) => chunks.push(c as Buffer));
+  req.on("end", () => {
+    (req as { rawBody?: string }).rawBody = Buffer.concat(chunks).toString("utf8");
+  });
+  next();
+});
+
 app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 app.use("/api", apiRouter);
 
