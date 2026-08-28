@@ -56,7 +56,12 @@ export function sanitizeChatbotConfig(cfg: ChatbotConfig): ChatbotConfig {
   const kb = cfg.chatbotKnowledgeBase;
   return {
     ...cfg,
-    chatbotRules: cfg.chatbotRules.filter((r) => r.pattern.trim() || r.reply.trim()),
+    chatbotRules: cfg.chatbotRules.filter((r) => {
+      const hasContent = r.pattern.trim() || r.reply.trim();
+      if (!hasContent) return false;
+      if (r.matchType === "regex" && !r.pattern.trim()) return false;
+      return true;
+    }),
     chatbotStopKeywords: [...new Set(cfg.chatbotStopKeywords.map((k) => k.trim()).filter(Boolean))],
     chatbotKnowledgeBase: {
       product: kb?.product ?? "",
@@ -403,7 +408,7 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
                       className="input"
                       type="number"
                       min={1}
-                      max={30}
+                      max={20}
                       value={value.chatbotMaxTurns}
                       onChange={(e) => update({ chatbotMaxTurns: Number(e.target.value) })}
                     />
