@@ -92,7 +92,7 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
   const ownId = event.account_info?.user_id;
   if (!senderId) return;
 
-  if (await isOwnAccount(senderId)) {
+  if (senderId === ownId || (await isOwnAccount(senderId))) {
     await createLog({
       type: "BOT_SELF_MESSAGE",
       message: `Mensagem de conta própria ignorada (${senderId})`,
