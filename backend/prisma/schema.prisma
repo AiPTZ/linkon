@@ -29,22 +29,28 @@ model User {
 }
 
 model Account {
-  id               String     @id @default(cuid())
-  unipileAccountId String     @unique
-  provider         String     @default("LINKEDIN")
-  username         String?
-  authMethod       String     @default("NATIVE")
-  status           String     @default("CONNECTING")
-  checkpointType   String?
-  credentialsEnc   String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  userId           String?
-  user             User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  campaigns        Campaign[]
-  logs             LogEvent[]
-  extractions      Extraction[]
-  conversations    Conversation[]
+  id                   String          @id @default(cuid())
+  unipileAccountId     String          @unique
+  provider             String          @default("LINKEDIN")
+  providerId           String?
+  username             String?
+  authMethod           String          @default("NATIVE")
+  status               String          @default("CONNECTING")
+  checkpointType       String?
+  credentialsEnc       String?
+  agentRepliesToday    Int             @default(0)
+  agentRepliesWeek     Int             @default(0)
+  agentRepliesDayDate  DateTime?
+  agentRepliesWeekDate DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  userId               String?
+  user                 User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  nativeAgent          NativeAgent?
+  campaigns            Campaign[]
+  logs                 LogEvent[]
+  extractions          Extraction[]
+  conversations        Conversation[]
 }
 
 model Campaign {
@@ -89,6 +95,25 @@ model Campaign {
   user                 User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   leads                Lead[]
   logs                 LogEvent[]
+}
+
+model NativeAgent {
+  id                 String   @id @default(cuid())
+  accountId          String   @unique
+  account            Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  enabled            Boolean  @default(false)
+  knowledgeBase      String   @default("")
+  tone               String   @default("consultivo e profissional")
+  transferMessage    String   @default("")
+  replyDelayMin      Int      @default(30)
+  replyDelayMax      Int      @default(30)
+  maxTurns           Int      @default(6)
+  replyDailyLimit    Int      @default(100)
+  replyWeeklyLimit   Int      @default(400)
+  initialMessageMode String   @default("TEMPLATE")
+  initialTemplate    String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Lead {
@@ -204,16 +229,16 @@ model Notification {
 
 model Conversation {
   id            String                @id @default(cuid())
-  campaignId    String
-  leadId        String
+  campaignId    String?
+  leadId        String?
   accountId     String
   unipileChatId String                @unique
   status        String                @default("BOT")
   lastMessageAt DateTime              @default(now())
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
-  campaign      Campaign              @relation(fields: [campaignId], references: [id])
-  lead          Lead                  @relation(fields: [leadId], references: [id])
+  campaign      Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  lead          Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
   account       Account               @relation(fields: [accountId], references: [id])
   messages      ConversationMessage[]
 
