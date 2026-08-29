@@ -5,6 +5,7 @@ import { refreshCounters, withinLimits } from "./services/invite.service";
 import { hasFlow, parseFlow, processFlowStep } from "./services/flow.service";
 import { createLog } from "./services/log.service";
 import { notify } from "./services/notification.service";
+import { refreshAgentCounters } from "./services/native-agent.service";
 import { logger } from "./utils/logger";
 import { randomDelayMs, isWorkHour } from "./utils/time";
 import type { Campaign } from "@prisma/client";
@@ -12,7 +13,7 @@ import type { Campaign } from "@prisma/client";
 export function startScheduler(): void {
   cron.schedule("*/5 * * * *", async () => {
     try {
-      await processCampaigns();
+      await Promise.all([processCampaigns(), refreshAgentCountersForAll()]);
     } catch (err) {
       logger.error("scheduler error", err);
     }
@@ -42,6 +43,22 @@ async function processCampaigns(): Promise<void> {
     } catch (err) {
       logger.error(`scheduler error for campaign ${campaign.id}`, err);
     }
+  }
+}
+
+export async function refreshAgentCountersForAll(): Promise<void> {
+  const accounts = await prisma.account.findMany({
+    where: { nativeAgent: { isNot: null } },
+    select: {
+      id: true,
+      agentRepliesToday: true,
+      agentRepliesWeek: true,
+      agentRepliesDayDate: true,
+      agentRepliesWeekDate: true,
+    },
+  });
+  for (const account of accounts) {
+    await refreshAgentCounters(account);
   }
 }
 

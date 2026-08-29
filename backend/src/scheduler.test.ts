@@ -4,7 +4,7 @@ vi.mock("./lib/prisma", () => ({
   prisma: {
     campaign: { findMany: vi.fn(), update: vi.fn() },
     lead: { findFirst: vi.fn(), count: vi.fn(), update: vi.fn() },
-    account: { findUnique: vi.fn() },
+    account: { findUnique: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -27,6 +27,10 @@ vi.mock("./services/flow.service", () => ({
 vi.mock("./services/log.service", () => ({ createLog: vi.fn() }));
 vi.mock("./services/notification.service", () => ({ notify: vi.fn() }));
 
+vi.mock("./services/native-agent.service", () => ({
+  refreshAgentCounters: vi.fn(),
+}));
+
 vi.mock("./utils/time", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./utils/time")>();
   return { ...actual, isWorkHour: () => true, randomDelayMs: () => 300_000 };
@@ -34,10 +38,11 @@ vi.mock("./utils/time", async (importOriginal) => {
 
 import { prisma } from "./lib/prisma";
 import { refreshCounters, withinLimits } from "./services/invite.service";
+import { refreshAgentCounters } from "./services/native-agent.service";
 import { sweepQueue, invitesQueue } from "./services/queue.service";
 import { notify } from "./services/notification.service";
 import { hasFlow } from "./services/flow.service";
-import { processBroadcastCampaign, processFlowCampaign, processInviteCampaign } from "./scheduler";
+import { processBroadcastCampaign, processFlowCampaign, processInviteCampaign, refreshAgentCountersForAll } from "./scheduler";
 import type { Campaign, Account, Lead } from "@prisma/client";
 
 const leadFindFirst = prisma.lead.findFirst as ReturnType<typeof vi.fn>;
@@ -50,6 +55,7 @@ const sweepAdd = sweepQueue.add as ReturnType<typeof vi.fn>;
 const inviteAdd = invitesQueue.add as ReturnType<typeof vi.fn>;
 const notifyFn = notify as ReturnType<typeof vi.fn>;
 const flowHas = hasFlow as ReturnType<typeof vi.fn>;
+const agentRefresh = refreshAgentCounters as ReturnType<typeof vi.fn>;
 
 function campaign(overrides: Partial<Campaign> = {}): Campaign {
   return {
@@ -233,5 +239,15 @@ describe("processFlowCampaign", () => {
       expect.objectContaining({ data: { status: "COMPLETED" } }),
     );
     expect(notifyFn).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_COMPLETED" }));
+  });
+});
+
+describe("refreshAgentCountersForAll", () => {
+  it("zera contadores de contas com agente", async () => {
+    const accountFindMany = prisma.account.findMany as ReturnType<typeof vi.fn>;
+    accountFindMany.mockResolvedValue([{ id: "A1", agentRepliesToday: 3, agentRepliesWeek: 9, agentRepliesDayDate: new Date(), agentRepliesWeekDate: new Date() }]);
+    agentRefresh.mockResolvedValue({});
+    await refreshAgentCountersForAll();
+    expect(agentRefresh).toHaveBeenCalledWith(expect.objectContaining({ id: "A1" }));
   });
 });
