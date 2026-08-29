@@ -19,10 +19,11 @@ export interface SweepJob {
 }
 
 export interface ChatbotJob {
+  accountId: string;
   chatId: string;
-  leadId: string;
-  campaignId: string;
   message: string;
+  campaignId?: string | null;
+  leadId?: string | null;
 }
 
 export interface SearchJob {
