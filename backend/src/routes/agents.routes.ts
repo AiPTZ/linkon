@@ -62,7 +62,7 @@ agentsRouter.get(
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
     const accounts = await prisma.account.findMany({
-      where: userId ? { userId } : {},
+      where: { ...(userId ? { userId } : {}), status: "OK" },
       orderBy: { createdAt: "desc" },
       include: { nativeAgent: true },
     });
