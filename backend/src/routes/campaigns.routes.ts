@@ -22,12 +22,6 @@ import { ah } from "./handler";
 
 export const campaignsRouter = Router();
 
-const chatbotRuleSchema = z.object({
-  matchType: z.enum(["contains", "keywords", "regex"]),
-  pattern: z.string().max(500),
-  reply: z.string().max(2000),
-});
-
 const flowNodeSchema = z.object({
   id: z.string().min(1),
   type: z.enum(BLOCK_TYPES as unknown as [string, ...string[]]),
@@ -60,28 +54,6 @@ const campaignObjectSchema = z.object({
   maxDelayMin: z.number().int().min(1).max(180).default(15),
   workStartHour: z.number().int().min(0).max(23).default(9),
   workEndHour: z.number().int().min(0).max(23).default(18),
-  chatbotEnabled: z.boolean().default(false),
-  chatbotRules: z.array(chatbotRuleSchema).default([]),
-  chatbotDefaultReply: z.string().max(2000).default(""),
-  chatbotReplyDelayMin: z.number().int().min(0).max(3600).default(30),
-  chatbotReplyDelayMax: z.number().int().min(0).max(7200).default(30),
-  chatbotStopKeywords: z.array(z.string().max(50)).default([]),
-  maxRepliesPerLead: z.number().int().min(1).max(20).default(3),
-  chatbotMode: z.enum(["RULES", "LLM"]).default("RULES"),
-  chatbotKnowledgeBase: z
-    .object({
-      product: z.string().max(3000).default(""),
-      faq: z.array(z.object({ q: z.string().max(500), a: z.string().max(2000) })).default([]),
-      prices: z.array(z.string().max(500)).default([]),
-      differentiators: z.array(z.string().max(500)).default([]),
-      objections: z.array(z.string().max(500)).default([]),
-    })
-    .default({}),
-  chatbotTone: z.string().max(2000).default("consultivo e profissional"),
-  chatbotInitialMessageMode: z.enum(["TEMPLATE", "AI"]).default("TEMPLATE"),
-  chatbotInitialTemplate: z.string().max(2000).default(""),
-  chatbotTransferMessage: z.string().max(2000).default(""),
-  chatbotMaxTurns: z.number().int().min(1).max(20).default(6),
   maxLeads: z.number().int().min(10).max(5000).default(1000),
   flow: flowSchema.optional(),
 });
@@ -107,27 +79,10 @@ function toData(body: z.infer<typeof campaignSchema> | z.infer<typeof updateCamp
     "maxDelayMin",
     "workStartHour",
     "workEndHour",
-    "chatbotEnabled",
-    "chatbotDefaultReply",
-    "chatbotReplyDelayMin",
-    "chatbotReplyDelayMax",
-    "maxRepliesPerLead",
-    "chatbotMode",
-    "chatbotTone",
-    "chatbotInitialMessageMode",
-    "chatbotInitialTemplate",
-    "chatbotTransferMessage",
-    "chatbotMaxTurns",
     "maxLeads",
   ] as const;
   for (const k of keys) {
     if (body[k] !== undefined) data[k] = body[k];
-  }
-  if (body.chatbotRules !== undefined) data.chatbotRules = JSON.stringify(body.chatbotRules);
-  if (body.chatbotStopKeywords !== undefined)
-    data.chatbotStopKeywords = JSON.stringify(body.chatbotStopKeywords);
-  if (body.chatbotKnowledgeBase !== undefined) {
-    data.chatbotKnowledgeBase = JSON.stringify(body.chatbotKnowledgeBase);
   }
   if (body.flow !== undefined) {
     const serialized = serializeFlow(body.flow as unknown as Flow);
