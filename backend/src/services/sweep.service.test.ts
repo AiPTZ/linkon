@@ -5,6 +5,7 @@ vi.mock("../lib/prisma", () => ({
     lead: { upsert: vi.fn(), update: vi.fn() },
     campaign: { update: vi.fn() },
     account: { findUnique: vi.fn() },
+    nativeAgent: { findUnique: vi.fn() },
   },
 }));
 

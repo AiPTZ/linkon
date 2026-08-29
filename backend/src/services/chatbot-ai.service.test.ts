@@ -120,7 +120,7 @@ describe("handleIncomingMessage", () => {
 
   it("retorna none quando o agente está desligado", async () => {
     (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
-    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ ...agent, enabled: false });
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ ...(agent as Record<string, unknown>), enabled: false });
     expect(await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "oi" })).toBe("none");
   });
 
@@ -186,7 +186,7 @@ describe("resolveInitialMessage", () => {
   });
 
   it("usa o fallback quando initialMessageMode não é AI", async () => {
-    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ ...agent, initialMessageMode: "TEMPLATE" });
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ ...(agent as Record<string, unknown>), initialMessageMode: "TEMPLATE" });
     const text = await resolveInitialMessage({ id: "C1", name: "Campanha Tech", accountId: "A1", inviteMessage: "Oi!" } as never, { name: "João", headline: "CEO" } as never);
     expect(text).toBe("Oi!");
   });
