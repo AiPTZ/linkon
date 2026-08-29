@@ -10,7 +10,7 @@ import {
   estimateCost,
   CONFIDENCE_THRESHOLD,
 } from "./ai.service";
-import { containsStopKeyword, parseKeywords } from "./chatbot.service";
+import { refreshAgentCounters, agentWithinLimits } from "./native-agent.service";
 import { logger } from "../utils/logger";
 import type { Campaign, Lead, Conversation } from "@prisma/client";
 
@@ -21,18 +21,18 @@ export function isConversationLocked(status: string): boolean {
 }
 
 export async function getOrCreateConversation(input: {
-  campaignId: string;
-  leadId: string;
   accountId: string;
   unipileChatId: string;
+  campaignId?: string | null;
+  leadId?: string | null;
 }): Promise<Conversation> {
   return prisma.conversation.upsert({
     where: { unipileChatId: input.unipileChatId },
     update: { lastMessageAt: new Date() },
     create: {
-      campaignId: input.campaignId,
-      leadId: input.leadId,
       accountId: input.accountId,
+      campaignId: input.campaignId ?? null,
+      leadId: input.leadId ?? null,
       unipileChatId: input.unipileChatId,
     },
   });
@@ -57,16 +57,16 @@ export async function recordMessage(input: {
 }
 
 export async function transferToHuman(input: {
-  campaignId: string;
-  leadId: string;
   accountId: string;
   chatId: string;
   conversationId: string;
   reason: string;
+  transferText?: string;
+  campaignId?: string | null;
+  leadId?: string | null;
 }): Promise<void> {
-  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId } });
   const transferText =
-    campaign?.chatbotTransferMessage?.trim() || "Vou conectar você com um especialista do nosso time.";
+    input.transferText?.trim() || "Vou conectar você com um especialista do nosso time.";
   try {
     await unipile.sendChatMessage(input.chatId, transferText);
   } catch (err) {
@@ -74,8 +74,8 @@ export async function transferToHuman(input: {
       type: "ERROR",
       level: "ERROR",
       message: `Falha ao enviar mensagem de transferência: ${(err as Error).message}`,
-      campaignId: input.campaignId,
-      leadId: input.leadId,
+      campaignId: input.campaignId ?? undefined,
+      leadId: input.leadId ?? undefined,
       accountId: input.accountId,
       payload: { chatId: input.chatId },
     });
@@ -92,43 +92,45 @@ export async function transferToHuman(input: {
   });
   await notify({
     accountId: input.accountId,
-    campaignId: input.campaignId,
+    campaignId: input.campaignId ?? undefined,
     type: "BOT_TRANSFERRED",
     level: "WARN",
-    message: `Conversa de um lead foi transferida para atendimento humano (${input.reason}).`,
+    message: `Conversa transferida para atendimento humano (${input.reason}).`,
     payload: { conversationId: input.conversationId, reason: input.reason },
   });
   await createLog({
     type: "BOT_TRANSFERRED",
     level: "WARN",
     message: `Bot transferiu para humano (${input.reason})`,
-    campaignId: input.campaignId,
-    leadId: input.leadId,
+    campaignId: input.campaignId ?? undefined,
+    leadId: input.leadId ?? undefined,
     accountId: input.accountId,
     payload: { chatId: input.chatId, reason: input.reason },
   });
 }
 
 export async function handleIncomingMessage(input: {
-  campaignId: string;
-  leadId: string;
+  accountId: string;
   chatId: string;
   message: string;
+  campaignId?: string | null;
+  leadId?: string | null;
 }): Promise<BotAction> {
-  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId } });
-  if (!campaign) return "none";
-  if (!campaign.chatbotEnabled || campaign.chatbotMode !== "LLM") return "none";
-
-  const lead = await prisma.lead.findUnique({ where: { id: input.leadId } });
-  if (!lead) return "none";
-
-  const account = await prisma.account.findUnique({ where: { id: campaign.accountId } });
+  const account = await prisma.account.findUnique({ where: { id: input.accountId } });
   if (!account) return "none";
 
+  const agent = await prisma.nativeAgent.findUnique({ where: { accountId: input.accountId } });
+  if (!agent || !agent.enabled) return "none";
+
+  const campaign = input.campaignId
+    ? await prisma.campaign.findUnique({ where: { id: input.campaignId } })
+    : null;
+  const lead = input.leadId ? await prisma.lead.findUnique({ where: { id: input.leadId } }) : null;
+
   const conversation = await getOrCreateConversation({
-    campaignId: campaign.id,
-    leadId: lead.id,
     accountId: account.id,
+    campaignId: input.campaignId,
+    leadId: input.leadId,
     unipileChatId: input.chatId,
   });
 
@@ -137,48 +139,52 @@ export async function handleIncomingMessage(input: {
   if (isConversationLocked(conversation.status)) {
     await createLog({
       type: "MESSAGE_RECEIVED",
-      message: `Resposta de ${lead.name ?? lead.providerId} ignorada (conversa em atendimento humano)`,
-      campaignId: campaign.id,
-      leadId: lead.id,
+      message: "Mensagem ignorada (conversa em atendimento humano)",
+      campaignId: input.campaignId ?? undefined,
+      leadId: input.leadId ?? undefined,
       accountId: account.id,
       payload: { message: input.message },
     });
     return "ignore";
   }
 
-  const stopKeywords = parseKeywords(campaign.chatbotStopKeywords);
-  if (containsStopKeyword(input.message, stopKeywords)) {
-    await createLog({
-      type: "MESSAGE_RECEIVED",
-      message: `Resposta de ${lead.name ?? lead.providerId} ignorada (palavra de parada)`,
-      campaignId: campaign.id,
-      leadId: lead.id,
-      accountId: account.id,
-      payload: { message: input.message },
-    });
-    return "ignore";
-  }
-
-  if (lead.replyCount >= campaign.chatbotMaxTurns) {
+  const fresh = await refreshAgentCounters(account);
+  const limit = agentWithinLimits({ agent, account: fresh });
+  if (!limit.ok) {
     await transferToHuman({
-      campaignId: campaign.id,
-      leadId: lead.id,
+      accountId: account.id,
+      chatId: input.chatId,
+      conversationId: conversation.id,
+      reason: limit.reason!,
+      transferText: agent.transferMessage,
+      campaignId: input.campaignId,
+      leadId: input.leadId,
+    });
+    return "transfer";
+  }
+
+  if (lead && campaign && lead.replyCount >= agent.maxTurns) {
+    await transferToHuman({
       accountId: account.id,
       chatId: input.chatId,
       conversationId: conversation.id,
       reason: "limite de turnos atingido",
+      transferText: agent.transferMessage,
+      campaignId: input.campaignId,
+      leadId: input.leadId,
     });
     return "transfer";
   }
 
   if (isJailbreak(input.message)) {
     await transferToHuman({
-      campaignId: campaign.id,
-      leadId: lead.id,
       accountId: account.id,
       chatId: input.chatId,
       conversationId: conversation.id,
       reason: "tentativa de jailbreak",
+      transferText: agent.transferMessage,
+      campaignId: input.campaignId,
+      leadId: input.leadId,
     });
     return "transfer";
   }
@@ -192,50 +198,54 @@ export async function handleIncomingMessage(input: {
     .filter((m) => m.role === "LEAD" || m.role === "BOT")
     .map((m) => ({ role: (m.role === "LEAD" ? "lead" : "bot") as "lead" | "bot", content: m.content }));
 
+  const kb = parseKnowledgeBase(agent.knowledgeBase);
   let decision;
   try {
     decision = await generateDecision({
-      campaignName: campaign.name,
-      knowledgeBase: parseKnowledgeBase(campaign.chatbotKnowledgeBase),
-      tone: campaign.chatbotTone,
-      leadName: lead.name,
-      leadHeadline: lead.headline,
+      productName: kb.product || campaign?.name || "produto",
+      knowledgeBase: kb,
+      tone: agent.tone,
+      leadName: lead?.name ?? null,
+      leadHeadline: lead?.headline ?? null,
       history,
       message: input.message,
-      transferMessage: campaign.chatbotTransferMessage?.trim() || "Vou te conectar com um especialista.",
+      transferMessage: agent.transferMessage?.trim() || "Vou te conectar com um especialista.",
     });
   } catch (err) {
     await transferToHuman({
-      campaignId: campaign.id,
-      leadId: lead.id,
       accountId: account.id,
       chatId: input.chatId,
       conversationId: conversation.id,
       reason: `falha técnica do LLM (${(err as Error).message})`,
+      transferText: agent.transferMessage,
+      campaignId: input.campaignId,
+      leadId: input.leadId,
     });
     return "transfer";
   }
 
   if (!decision.canAnswer || decision.confidence < CONFIDENCE_THRESHOLD) {
     await transferToHuman({
-      campaignId: campaign.id,
-      leadId: lead.id,
       accountId: account.id,
       chatId: input.chatId,
       conversationId: conversation.id,
       reason: decision.confidence < CONFIDENCE_THRESHOLD ? "confiança baixa" : "fora da base de conhecimento",
+      transferText: agent.transferMessage,
+      campaignId: input.campaignId,
+      leadId: input.leadId,
     });
     return "transfer";
   }
 
   if (decision.transfer) {
     await transferToHuman({
-      campaignId: campaign.id,
-      leadId: lead.id,
       accountId: account.id,
       chatId: input.chatId,
       conversationId: conversation.id,
       reason: "lead pronto para atendimento humano",
+      transferText: agent.transferMessage,
+      campaignId: input.campaignId,
+      leadId: input.leadId,
     });
     return "transfer";
   }
@@ -250,19 +260,30 @@ export async function handleIncomingMessage(input: {
       messageId: res.message_id,
       costUsd,
     });
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { lastMessageAt: new Date(), lastMessageText: decision.reply, status: "RESPONDED", replyCount: { increment: 1 } },
+    await prisma.account.update({
+      where: { id: account.id },
+      data: { agentRepliesToday: { increment: 1 }, agentRepliesWeek: { increment: 1 } },
     });
+    if (lead) {
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: {
+          lastMessageAt: new Date(),
+          lastMessageText: decision.reply,
+          status: "RESPONDED",
+          replyCount: { increment: 1 },
+        },
+      });
+    }
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: { status: "BOT", lastMessageAt: new Date() },
     });
     await createLog({
       type: "BOT_REPLY",
-      message: `Resposta IA enviada para ${lead.name ?? lead.providerId}`,
-      campaignId: campaign.id,
-      leadId: lead.id,
+      message: `Resposta IA enviada${lead ? ` para ${lead.name ?? lead.providerId}` : ""}`,
+      campaignId: input.campaignId ?? undefined,
+      leadId: input.leadId ?? undefined,
       accountId: account.id,
       payload: { reply: decision.reply, confidence: decision.confidence, costUsd },
     });
@@ -272,8 +293,8 @@ export async function handleIncomingMessage(input: {
       type: "ERROR",
       level: "ERROR",
       message: `Falha ao enviar resposta do bot: ${(err as Error).message}`,
-      campaignId: campaign.id,
-      leadId: lead.id,
+      campaignId: input.campaignId ?? undefined,
+      leadId: input.leadId ?? undefined,
       accountId: account.id,
       payload: { reply: decision.reply },
     });
@@ -282,29 +303,19 @@ export async function handleIncomingMessage(input: {
 }
 
 export async function resolveInitialMessage(
-  campaign: Pick<
-    Campaign,
-    | "name"
-    | "chatbotMode"
-    | "chatbotInitialMessageMode"
-    | "chatbotInitialTemplate"
-    | "chatbotKnowledgeBase"
-    | "chatbotTone"
-    | "inviteMessage"
-  >,
+  campaign: Pick<Campaign, "name" | "accountId" | "inviteMessage">,
   lead: Pick<Lead, "name" | "headline">,
 ): Promise<string> {
   const fallback = (campaign.inviteMessage ?? "").trim();
-  if (campaign.chatbotMode !== "LLM" || campaign.chatbotInitialMessageMode !== "AI") {
-    return fallback;
-  }
-  if (!fallback && !campaign.chatbotInitialTemplate) return fallback;
+  const agent = await prisma.nativeAgent.findUnique({ where: { accountId: campaign.accountId } });
+  if (!agent || agent.initialMessageMode !== "AI") return fallback;
+  if (!fallback && !agent.initialTemplate) return fallback;
   try {
-    const kb = parseKnowledgeBase(campaign.chatbotKnowledgeBase);
+    const kb = parseKnowledgeBase(agent.knowledgeBase);
     const out = await generateInitialMessage({
-      campaignName: campaign.name,
-      tone: campaign.chatbotTone || "consultivo e profissional",
-      template: campaign.chatbotInitialTemplate || fallback,
+      productName: campaign.name,
+      tone: agent.tone || "consultivo e profissional",
+      template: agent.initialTemplate || fallback,
       leadName: lead.name,
       leadHeadline: lead.headline,
       product: kb.product || campaign.name,
