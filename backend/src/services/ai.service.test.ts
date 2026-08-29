@@ -66,7 +66,7 @@ describe("isJailbreak", () => {
 describe("buildSystemPrompt", () => {
   it("inclui base, tom, lead e regras de transferência", () => {
     const p = buildSystemPrompt({
-      campaignName: "Campanha Tech",
+      productName: "Campanha Tech",
       knowledgeBase: KB,
       tone: "consultivo",
       leadName: "João",
@@ -86,7 +86,7 @@ describe("generateDecision", () => {
   it("chama chat/completions e devolve decisão", async () => {
     mockOpenAi('{"reply":"A partir de R$ 97/mês.","canAnswer":true,"confidence":0.9}');
     const d = await generateDecision({
-      campaignName: "Campanha Tech",
+      productName: "Campanha Tech",
       knowledgeBase: KB,
       tone: "consultivo",
       history: [],
@@ -108,7 +108,7 @@ describe("generateDecision", () => {
   it("substitui reply pelo texto de transferência quando canAnswer é false", async () => {
     mockOpenAi('{"reply":"qualquer coisa","canAnswer":false,"confidence":0.1}');
     const d = await generateDecision({
-      campaignName: "C",
+      productName: "C",
       knowledgeBase: KB,
       tone: "consultivo",
       history: [],
@@ -123,7 +123,7 @@ describe("generateDecision", () => {
   it("marca transfer true quando a IA decide transferir o lead", async () => {
     mockOpenAi('{"reply":"Vou transferir.","canAnswer":true,"confidence":0.9,"transfer":true}');
     const d = await generateDecision({
-      campaignName: "C",
+      productName: "C",
       knowledgeBase: KB,
       tone: "consultivo",
       history: [],
@@ -139,7 +139,7 @@ describe("generateDecision", () => {
     mockOpenAi("resposta quebrada");
     await expect(
       generateDecision({
-        campaignName: "C",
+        productName: "C",
         knowledgeBase: KB,
         tone: "consultivo",
         history: [],
@@ -156,7 +156,7 @@ describe("generateDecision", () => {
     );
     await expect(
       generateDecision({
-        campaignName: "C",
+        productName: "C",
         knowledgeBase: KB,
         tone: "consultivo",
         history: [],
@@ -172,7 +172,7 @@ describe("generateDecision", () => {
     env.USER_LLM_API_KEY = "";
     await expect(
       generateDecision({
-        campaignName: "C",
+        productName: "C",
         knowledgeBase: KB,
         tone: "consultivo",
         history: [],
@@ -197,7 +197,7 @@ describe("generateInitialMessage", () => {
       }),
     );
     const out = await generateInitialMessage({
-      campaignName: "Campanha Tech",
+      productName: "Campanha Tech",
       tone: "consultivo",
       template: "Olá {nome}, vi seu trabalho em {cargo} na {empresa}...",
       leadName: "João",

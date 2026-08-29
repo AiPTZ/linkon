@@ -122,7 +122,7 @@ async function chatCompletion(input: {
 }
 
 export function buildSystemPrompt(input: {
-  campaignName: string;
+  productName: string;
   knowledgeBase: KnowledgeBase;
   tone: string;
   leadName?: string | null;
@@ -131,7 +131,7 @@ export function buildSystemPrompt(input: {
 }): string {
   const kb = input.knowledgeBase;
   const baseBlock = [
-    `Produto: ${kb.product || input.campaignName}`,
+    `Produto: ${kb.product || input.productName}`,
     kb.faq.length ? `FAQ:\n${kb.faq.map((f) => `- ${f.q}\n  Resposta: ${f.a}`).join("\n")}` : "",
     kb.prices.length ? `Preços:\n${kb.prices.map((p) => `- ${p}`).join("\n")}` : "",
     kb.differentiators.length ? `Diferenciais:\n${kb.differentiators.map((d) => `- ${d}`).join("\n")}` : "",
@@ -142,7 +142,7 @@ export function buildSystemPrompt(input: {
   const leadLine = input.leadName ? `\nLead: ${input.leadName}${input.leadHeadline ? ` (${input.leadHeadline})` : ""}` : "";
 
   return [
-    `Você é um assistente de vendas do produto "${input.campaignName}" conversando com um lead no LinkedIn.`,
+    `Você é um assistente de vendas do produto "${input.productName}" conversando com um lead no LinkedIn.`,
     `Tom de voz: ${input.tone}. Responda em português do Brasil, curto e direto (até 300 caracteres).`,
     "Responda SOMENTE com base na base de conhecimento abaixo. NUNCA use conhecimento externo.",
     `Base de conhecimento:\n${baseBlock}`,
@@ -163,7 +163,7 @@ export function buildSystemPrompt(input: {
 }
 
 export async function generateDecision(input: {
-  campaignName: string;
+  productName: string;
   knowledgeBase: KnowledgeBase;
   tone: string;
   leadName?: string | null;
@@ -214,7 +214,7 @@ export async function generateDecision(input: {
 }
 
 export async function generateInitialMessage(input: {
-  campaignName: string;
+  productName: string;
   tone: string;
   template: string;
   leadName?: string | null;
@@ -222,7 +222,7 @@ export async function generateInitialMessage(input: {
   product?: string;
 }): Promise<{ text: string; tokensIn: number; tokensOut: number }> {
   const system = [
-    `Você escreve a primeira mensagem de um convite no LinkedIn para o produto "${input.campaignName}".`,
+    `Você escreve a primeira mensagem de um convite no LinkedIn para o produto "${input.productName}".`,
     `Tom de voz: ${input.tone}.`,
     "Regras: máximo 200 caracteres, natural e sem promessas, sem exageros, nunca inventar preço/prazo.",
     input.template ? `Use o template abaixo como referência (não o copie literalmente):\n${input.template}` : "",
