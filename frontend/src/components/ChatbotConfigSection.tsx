@@ -288,6 +288,7 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
                       id="chatbotTone"
                       className="input"
                       placeholder="consultivo e profissional"
+                      maxLength={2000}
                       value={value.chatbotTone}
                       onChange={(e) => update({ chatbotTone: e.target.value })}
                     />
@@ -324,6 +325,7 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
                         <input
                           className="input col-span-5"
                           placeholder="Pergunta"
+                          maxLength={500}
                           value={item.q}
                           onChange={(e) => {
                             const next = [...kb.faq];
@@ -335,6 +337,7 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
                         <input
                           className="input col-span-6"
                           placeholder="Resposta"
+                          maxLength={2000}
                           value={item.a}
                           onChange={(e) => {
                             const next = [...kb.faq];
@@ -361,7 +364,9 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
                       className="input min-h-16 resize-y"
                       placeholder={"Plano Mensal: R$ 97\nPlano Anual: R$ 900"}
                       value={kb.prices.join("\n")}
-                      onChange={(e) => updateKb({ prices: e.target.value.split("\n") })}
+                      onChange={(e) =>
+                        updateKb({ prices: e.target.value.split("\n").map((l) => l.slice(0, 500)) })
+                      }
                     />
                   </div>
 
@@ -371,7 +376,9 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
                       className="input min-h-16 resize-y"
                       placeholder={"Mensagens personalizadas com IA\nSuporte em português"}
                       value={kb.differentiators.join("\n")}
-                      onChange={(e) => updateKb({ differentiators: e.target.value.split("\n") })}
+                      onChange={(e) =>
+                        updateKb({ differentiators: e.target.value.split("\n").map((l) => l.slice(0, 500)) })
+                      }
                     />
                   </div>
 
@@ -381,7 +388,9 @@ export function ChatbotConfigSection({ value, onChange, title = "Chatbot de resp
                       className="input min-h-16 resize-y"
                       placeholder={"Não tenho tempo: o bot responde sozinho no seu LinkedIn"}
                       value={kb.objections.join("\n")}
-                      onChange={(e) => updateKb({ objections: e.target.value.split("\n") })}
+                      onChange={(e) =>
+                        updateKb({ objections: e.target.value.split("\n").map((l) => l.slice(0, 500)) })
+                      }
                     />
                   </div>
 

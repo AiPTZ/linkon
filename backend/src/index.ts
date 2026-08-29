@@ -32,7 +32,9 @@ app.use((_req: Request, res: Response) => {
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {
-    return res.status(400).json({ error: "Dados inválidos", details: err.flatten() });
+    const issue = err.issues[0];
+    const where = issue ? ` (${issue.path.join(".") || "body"}: ${issue.message})` : "";
+    return res.status(400).json({ error: `Dados inválidos${where}`, details: err.flatten() });
   }
   const e = err as { status?: number; message?: string; details?: unknown };
   const status = e.status ?? 500;

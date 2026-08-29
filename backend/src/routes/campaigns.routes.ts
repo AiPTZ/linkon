@@ -70,14 +70,14 @@ const campaignObjectSchema = z.object({
   chatbotMode: z.enum(["RULES", "LLM"]).default("RULES"),
   chatbotKnowledgeBase: z
     .object({
-      product: z.string().max(500).default(""),
+      product: z.string().max(3000).default(""),
       faq: z.array(z.object({ q: z.string().max(500), a: z.string().max(2000) })).default([]),
       prices: z.array(z.string().max(500)).default([]),
       differentiators: z.array(z.string().max(500)).default([]),
       objections: z.array(z.string().max(500)).default([]),
     })
     .default({}),
-  chatbotTone: z.string().max(200).default("consultivo e profissional"),
+  chatbotTone: z.string().max(2000).default("consultivo e profissional"),
   chatbotInitialMessageMode: z.enum(["TEMPLATE", "AI"]).default("TEMPLATE"),
   chatbotInitialTemplate: z.string().max(2000).default(""),
   chatbotTransferMessage: z.string().max(2000).default(""),
