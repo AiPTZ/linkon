@@ -91,7 +91,7 @@ async function chatCompletion(input: {
 }): Promise<{ content: string; tokensIn: number; tokensOut: number }> {
   const apiKey = env.USER_LLM_API_KEY;
   if (!apiKey) {
-    throw new Error("USER_LLM_API_KEY não configurada. Defina no .env para usar o chatbot IA.");
+    throw new Error("USER_LLM_API_KEY não configurada. Defina no .env para usar o agente IA.");
   }
   const res = await fetch(`${baseUrl()}/chat/completions`, {
     method: "POST",

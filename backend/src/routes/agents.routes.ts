@@ -15,19 +15,24 @@ const knowledgeBaseSchema = z.object({
   objections: z.array(z.string().max(500)).default([]),
 });
 
-const agentUpdateSchema = z.object({
-  enabled: z.boolean().optional(),
-  knowledgeBase: knowledgeBaseSchema.optional(),
-  tone: z.string().max(2000).optional(),
-  transferMessage: z.string().max(2000).optional(),
-  replyDelayMin: z.number().int().min(0).max(3600).optional(),
-  replyDelayMax: z.number().int().min(0).max(7200).optional(),
-  maxTurns: z.number().int().min(1).max(20).optional(),
-  replyDailyLimit: z.number().int().min(1).max(1000).optional(),
-  replyWeeklyLimit: z.number().int().min(1).max(10000).optional(),
-  initialMessageMode: z.enum(["TEMPLATE", "AI"]).optional(),
-  initialTemplate: z.string().max(2000).optional(),
-});
+const agentUpdateSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    knowledgeBase: knowledgeBaseSchema.optional(),
+    tone: z.string().max(2000).optional(),
+    transferMessage: z.string().max(2000).optional(),
+    replyDelayMin: z.number().int().min(0).max(3600).optional(),
+    replyDelayMax: z.number().int().min(0).max(7200).optional(),
+    maxTurns: z.number().int().min(1).max(20).optional(),
+    replyDailyLimit: z.number().int().min(1).max(1000).optional(),
+    replyWeeklyLimit: z.number().int().min(1).max(10000).optional(),
+    initialMessageMode: z.enum(["TEMPLATE", "AI"]).optional(),
+    initialTemplate: z.string().max(2000).optional(),
+  })
+  .refine((body) => body.replyDelayMin === undefined || body.replyDelayMax === undefined || body.replyDelayMin <= body.replyDelayMax, {
+    path: ["replyDelayMin"],
+    message: "replyDelayMin não pode ser maior que replyDelayMax",
+  });
 
 function toData(body: z.infer<typeof agentUpdateSchema>) {
   const data: Record<string, unknown> = {};
@@ -87,6 +92,9 @@ agentsRouter.put(
     const account = await prisma.account.findUnique({ where: { id: req.params.accountId } });
     assertAccountInScope(account, userId);
     const data = toData(parsed.data);
+    if (Object.keys(data).length === 0) {
+      throw new ApiError(400, "Nenhum campo para atualizar");
+    }
     const agent = await prisma.nativeAgent.upsert({
       where: { accountId: account!.id },
       update: data,

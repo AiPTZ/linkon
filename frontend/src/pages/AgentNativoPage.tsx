@@ -49,6 +49,7 @@ export function AgentNativoPage() {
         );
       } catch (err) {
         toastFromError(toast, err);
+        setRows([]);
       }
     })();
   }, [toast]);

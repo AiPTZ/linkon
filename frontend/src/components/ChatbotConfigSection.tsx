@@ -36,6 +36,8 @@ export function defaultAgentConfig(): AgentConfig {
 
 export function sanitizeAgentConfig(cfg: AgentConfig): AgentConfig {
   const kb = cfg.knowledgeBase ?? EMPTY_KB;
+  const floor = (v: number | undefined, min: number, fallback: number) =>
+    typeof v !== "number" || !Number.isFinite(v) || v < min ? fallback : Math.floor(v);
   return {
     ...cfg,
     knowledgeBase: {
@@ -45,6 +47,11 @@ export function sanitizeAgentConfig(cfg: AgentConfig): AgentConfig {
       differentiators: (kb.differentiators ?? []).map((d) => d.trim()).filter(Boolean),
       objections: (kb.objections ?? []).map((o) => o.trim()).filter(Boolean),
     },
+    replyDelayMin: floor(cfg.replyDelayMin, 0, 30),
+    replyDelayMax: floor(cfg.replyDelayMax, 0, 30),
+    maxTurns: floor(cfg.maxTurns, 1, 6),
+    replyDailyLimit: floor(cfg.replyDailyLimit, 1, 100),
+    replyWeeklyLimit: floor(cfg.replyWeeklyLimit, 1, 400),
   };
 }
 
