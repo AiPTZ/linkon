@@ -8,6 +8,7 @@ const worker = new Worker(
   "linkon-chatbot",
   async (job) => {
     const { accountId, chatId, message, campaignId, leadId } = job.data as ChatbotJob;
+    if (!accountId) return;
     await handleIncomingMessage({ accountId, chatId, message, campaignId, leadId });
   },
   { connection: redisConnection, concurrency: 2 },

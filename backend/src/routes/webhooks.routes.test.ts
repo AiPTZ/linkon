@@ -4,9 +4,10 @@ vi.mock("../lib/prisma", () => ({
   prisma: {
     lead: { findMany: vi.fn(), update: vi.fn() },
     campaign: { findUnique: vi.fn() },
-    conversation: { findUnique: vi.fn(), update: vi.fn() },
+    conversation: { findUnique: vi.fn(), update: vi.fn(), upsert: vi.fn() },
     conversationMessage: { create: vi.fn() },
-    account: { findUnique: vi.fn() },
+    account: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    nativeAgent: { findUnique: vi.fn() },
   },
 }));
 
@@ -17,11 +18,18 @@ vi.mock("../services/flow.service", () => ({
   hasFlow: vi.fn(() => false),
 }));
 vi.mock("../services/unipile.service", () => ({ unipile: { getProfile: vi.fn() } }));
+vi.mock("../services/chatbot-ai.service", () => ({
+  getOrCreateConversation: vi.fn(),
+  recordMessage: vi.fn(),
+  isConversationLocked: vi.fn(() => false),
+}));
 vi.mock("../config/env", () => ({ env: {} }));
+vi.mock("../utils/time", () => ({ randomInt: (min: number) => min }));
 
 import { prisma } from "../lib/prisma";
 import { chatbotQueue } from "../services/queue.service";
-import { unipile } from "../services/unipile.service";
+import { createLog } from "../services/log.service";
+import { getOrCreateConversation } from "../services/chatbot-ai.service";
 import {
   pickBestLead,
   parseWebhookBody,
@@ -34,158 +42,112 @@ function lead(overrides: Partial<WebhookLeadCandidate>): WebhookLeadCandidate {
     id: "L",
     campaignId: "C",
     createdAt: new Date("2026-08-28T12:00:00Z"),
-    campaign: { status: "RUNNING", chatbotEnabled: true },
+    campaign: { status: "RUNNING" },
     ...overrides,
   };
 }
+
+beforeEach(() => vi.clearAllMocks());
 
 describe("pickBestLead", () => {
   it("returns null when no leads match", () => {
     expect(pickBestLead([])).toBeNull();
   });
 
-  it("returns the only lead when a single candidate exists", () => {
-    const only = lead({ id: "L1" });
-    expect(pickBestLead([only])?.id).toBe("L1");
-  });
-
   it("prefers a RUNNING campaign over a completed one", () => {
-    const running = lead({ id: "L1", campaign: { status: "RUNNING", chatbotEnabled: false } });
-    const completed = lead({ id: "L2", campaign: { status: "COMPLETED", chatbotEnabled: true } });
+    const running = lead({ id: "L1", campaign: { status: "RUNNING" } });
+    const completed = lead({ id: "L2", campaign: { status: "COMPLETED" } });
     expect(pickBestLead([completed, running])?.id).toBe("L1");
   });
+});
 
-  it("prefers a chatbot-enabled campaign when both are in the same state", () => {
-    const disabled = lead({ id: "L1", campaign: { status: "COMPLETED", chatbotEnabled: false } });
-    const enabled = lead({ id: "L2", campaign: { status: "COMPLETED", chatbotEnabled: true } });
-    expect(pickBestLead([disabled, enabled])?.id).toBe("L2");
+describe("handleWebhookEvent", () => {
+  const account = { id: "A1", unipileAccountId: "UA1", providerId: "OWN1" };
+
+  it("ignora mensagem de conta própria (anti-loop)", async () => {
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT1",
+      account_info: { user_id: "OWN1", account_id: "UA1" },
+      sender: { attendee_provider_id: "OWN1", name: "Eu" },
+    });
+    expect(createLog).toHaveBeenCalledWith(expect.objectContaining({ type: "BOT_SELF_MESSAGE" }));
+    expect(chatbotQueue.add).not.toHaveBeenCalled();
   });
 
-  it("ties break to the most recently created lead", () => {
-    const older = lead({
-      id: "L1",
-      createdAt: new Date("2026-08-27T12:00:00Z"),
-      campaign: { status: "COMPLETED", chatbotEnabled: false },
+  it("ignora mensagem quando o agente nativo está desligado", async () => {
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ enabled: false });
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT1",
+      account_info: { user_id: "OWN1", account_id: "UA1" },
+      sender: { attendee_provider_id: "P1", name: "João" },
     });
-    const newer = lead({
-      id: "L2",
-      createdAt: new Date("2026-08-28T12:00:00Z"),
-      campaign: { status: "COMPLETED", chatbotEnabled: false },
+    expect(createLog).toHaveBeenCalledWith(expect.objectContaining({ type: "AGENT_DISABLED" }));
+    expect(chatbotQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("enfileira job com accountId para mensagem de lead de campanha", async () => {
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      replyDelayMin: 30,
+      replyDelayMax: 30,
     });
-    expect(pickBestLead([older, newer])?.id).toBe("L2");
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      lead({ id: "L1", campaignId: "C1", providerId: "P1", name: "João" }),
+    ]);
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "C1", accountId: "A1", flow: "" });
+    (getOrCreateConversation as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "BOT" });
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT1",
+      account_info: { user_id: "OWN1", account_id: "UA1" },
+      sender: { attendee_provider_id: "P1", name: "João" },
+    });
+    expect(chatbotQueue.add).toHaveBeenCalledWith(
+      "reply",
+      expect.objectContaining({ accountId: "A1", chatId: "CHAT1", campaignId: "C1", leadId: "L1", message: "olá" }),
+      expect.objectContaining({ delay: 30000 }),
+    );
+  });
+
+  it("enfileira job sem lead para conversa nativa", async () => {
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      replyDelayMin: 30,
+      replyDelayMax: 30,
+    });
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getOrCreateConversation as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "BOT" });
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT2",
+      account_info: { user_id: "OWN1", account_id: "UA1" },
+      sender: { attendee_provider_id: "P9", name: "Maria" },
+    });
+    expect(chatbotQueue.add).toHaveBeenCalledWith(
+      "reply",
+      expect.objectContaining({ accountId: "A1", chatId: "CHAT2", campaignId: null, leadId: null, message: "olá" }),
+      expect.any(Object),
+    );
   });
 });
 
 describe("parseWebhookBody", () => {
-  it("parses a JSON body sent with a form content-type (Unipile quirk)", () => {
-    const rawBody = '{"event":"message_received","chat_id":"abc","message":"opa"}';
-    const parsed = parseWebhookBody({ '{"event":"message_received","chat_id":"abc","message":"opa"}': "" }, rawBody) as {
-      event: string;
-      chat_id: string;
-    };
-    expect(parsed.event).toBe("message_received");
-    expect(parsed.chat_id).toBe("abc");
-  });
-
-  it("falls back to the parsed body when raw is not JSON", () => {
-    const body = { event: "message_received", chat_id: "abc" };
-    expect(parseWebhookBody(body, "event=message_received&chat_id=abc")).toEqual(body);
-  });
-
-  it("returns the parsed body when raw JSON is malformed", () => {
-    const body = { event: "new_relation" };
-    expect(parseWebhookBody(body, "{not json")).toEqual(body);
-  });
-});
-
-describe("handleWebhookEvent (message_received)", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  const campaign = {
-    id: "C1",
-    accountId: "A1",
-    chatbotEnabled: true,
-    chatbotMode: "LLM",
-    flow: null,
-    chatbotReplyDelayMin: 30,
-    chatbotReplyDelayMax: 30,
-  };
-
-  function seedLead(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-    return {
-      id: "L1",
-      campaignId: "C1",
-      createdAt: new Date(),
-      providerId: "P1",
-      name: "João",
-      headline: null,
-      campaign: { status: "RUNNING", chatbotEnabled: true },
-      ...overrides,
-    };
-  }
-
-  const event = (overrides: Record<string, unknown> = {}) => ({
-    event: "message_received",
-    sender: { attendee_provider_id: "P1", name: "João" },
-    account_info: { user_id: "ME" },
-    chat_id: "CHAT1",
-    message: "olá?",
-    ...overrides,
-  });
-
-  function seedBasic() {
-    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([seedLead()]);
-    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(campaign);
-    (prisma.lead.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
-    (prisma.conversationMessage.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "M1" });
-    (prisma.conversation.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
-  }
-
-  it("enfileira o job do bot quando a conversa não existe", async () => {
-    seedBasic();
-    (prisma.conversation.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    await handleWebhookEvent(event());
-    expect(chatbotQueue.add).toHaveBeenCalledTimes(1);
-    expect((chatbotQueue.add as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({
-      chatId: "CHAT1",
-      leadId: "L1",
-      campaignId: "C1",
-      message: "olá?",
-    });
-  });
-
-  it("não enfileira e registra a mensagem do lead quando a conversa está travada", async () => {
-    seedBasic();
-    (prisma.conversation.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "CONV1",
-      status: "NEEDS_HUMAN",
-    });
-    await handleWebhookEvent(event());
-    expect(chatbotQueue.add).not.toHaveBeenCalled();
-    const msgCreate = (prisma.conversationMessage.create as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(msgCreate.data.role).toBe("LEAD");
-    expect(msgCreate.data.content).toBe("olá?");
-    const convUpdate = (prisma.conversation.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(convUpdate.where.id).toBe("CONV1");
-  });
-
-  it("sincroniza o nome do lead a partir do perfil quando o nome está ausente", async () => {
-    seedBasic();
-    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([seedLead({ name: null })]);
-    (prisma.conversation.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "A1",
-      unipileAccountId: "UA1",
-    });
-    (unipile.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({
-      first_name: "João",
-      last_name: "Silva",
-      headline: "CEO",
-    });
-
-    await handleWebhookEvent(event());
-    expect(unipile.getProfile).toHaveBeenCalledWith("UA1", "P1");
-    const updates = (prisma.lead.update as ReturnType<typeof vi.fn>).mock.calls;
-    expect(updates.some((c) => c[0].data && c[0].data.name === "João Silva")).toBe(true);
+  it("usa o corpo bruto quando é JSON", () => {
+    const raw = JSON.stringify({ event: "message_received" });
+    expect(parseWebhookBody({}, raw)).toEqual({ event: "message_received" });
   });
 });

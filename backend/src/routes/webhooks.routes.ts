@@ -4,7 +4,7 @@ import { chatbotQueue } from "../services/queue.service";
 import { createLog } from "../services/log.service";
 import { advanceOnEvent, hasFlow } from "../services/flow.service";
 import { unipile } from "../services/unipile.service";
-import { recordMessage, isConversationLocked } from "../services/chatbot-ai.service";
+import { getOrCreateConversation, recordMessage, isConversationLocked } from "../services/chatbot-ai.service";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { randomInt } from "../utils/time";
@@ -34,7 +34,7 @@ export interface WebhookLeadCandidate {
   providerId?: string;
   name?: string | null;
   headline?: string | null;
-  campaign: { status: string; chatbotEnabled: boolean };
+  campaign: { status: string };
 }
 
 async function syncLeadNameFromProfile(input: {
@@ -61,86 +61,134 @@ async function syncLeadNameFromProfile(input: {
 
 export function pickBestLead<T extends WebhookLeadCandidate>(leads: T[]): T | null {
   if (leads.length === 0) return null;
-  const score = (l: WebhookLeadCandidate) =>
-    (l.campaign.status === "RUNNING" ? 2 : 0) + (l.campaign.chatbotEnabled ? 1 : 0);
+  const score = (l: WebhookLeadCandidate) => (l.campaign.status === "RUNNING" ? 2 : 0);
   return [...leads].sort(
     (a, b) => score(b) - score(a) || b.createdAt.getTime() - a.createdAt.getTime(),
   )[0];
 }
 
+async function resolveAccount(input: {
+  accountId?: string;
+  userId?: string;
+}): Promise<{ id: string; providerId: string | null } | null> {
+  if (input.accountId) {
+    const byUnipile = await prisma.account.findUnique({ where: { unipileAccountId: input.accountId } });
+    if (byUnipile) return { id: byUnipile.id, providerId: byUnipile.providerId ?? null };
+  }
+  if (input.userId) {
+    const byProvider = await prisma.account.findFirst({ where: { providerId: input.userId } });
+    if (byProvider) return { id: byProvider.id, providerId: byProvider.providerId ?? null };
+  }
+  return null;
+}
+
+async function isOwnAccount(senderId: string): Promise<boolean> {
+  const found = await prisma.account.findFirst({ where: { providerId: senderId } });
+  return Boolean(found);
+}
+
 async function handleMessageReceived(event: MessageWebhook): Promise<void> {
   const senderId = event.sender?.attendee_provider_id;
   const ownId = event.account_info?.user_id;
-  if (!senderId || senderId === ownId) return;
+  if (!senderId) return;
+
+  if (await isOwnAccount(senderId)) {
+    await createLog({
+      type: "BOT_SELF_MESSAGE",
+      message: `Mensagem de conta própria ignorada (${senderId})`,
+      payload: { chatId: event.chat_id },
+    });
+    return;
+  }
+
+  const account = await resolveAccount({
+    accountId: event.account_info?.account_id,
+    userId: event.account_info?.user_id,
+  });
+  if (!account) return;
+
+  if (ownId && account.providerId !== ownId) {
+    await prisma.account.update({
+      where: { id: account.id },
+      data: { providerId: ownId },
+    });
+    account.providerId = ownId;
+  }
+
+  const agent = await prisma.nativeAgent.findUnique({ where: { accountId: account.id } });
+  const text = typeof event.message === "string" ? event.message.slice(0, 1000) : "";
+  const hasChat = Boolean(event.chat_id && text);
 
   const candidates = await prisma.lead.findMany({
-    where: { providerId: senderId },
-    include: { campaign: { select: { status: true, chatbotEnabled: true } } },
+    where: { providerId: senderId, campaign: { accountId: account.id } },
+    include: { campaign: { select: { status: true } } },
   });
   const lead = pickBestLead(candidates);
-  if (!lead) return;
 
-  const campaign = await prisma.campaign.findUnique({ where: { id: lead.campaignId } });
-  if (!campaign) return;
-
-  if (lead.providerId && (!lead.name || lead.name === lead.providerId)) {
-    await syncLeadNameFromProfile({ accountId: campaign.accountId, lead: lead as never });
-  }
-
-  const text = typeof event.message === "string" ? event.message.slice(0, 1000) : "";
-  await prisma.lead.update({
-    where: { id: lead.id },
-    data: {
-      lastMessageAt: new Date(),
-      lastMessageText: text,
-      status: "RESPONDED",
-    },
-  });
-  await createLog({
-    type: "MESSAGE_RECEIVED",
-    message: `Mensagem recebida de ${event.sender?.name || senderId}${text ? `: "${text}"` : ""}`,
-    campaignId: lead.campaignId,
-    leadId: lead.id,
-    payload: { chatId: event.chat_id, message: text },
-  });
-
-  await advanceOnEvent(campaign, { ...lead, status: "RESPONDED" });
-
-  if (!campaign.chatbotEnabled || hasFlow(campaign.flow) || !text || !event.chat_id) return;
-
-  if (event.chat_id) {
-    const existing = await prisma.conversation.findUnique({
-      where: { unipileChatId: event.chat_id },
-    });
-    if (existing && isConversationLocked(existing.status)) {
-      if (text) {
-        await recordMessage({ conversationId: existing.id, role: "LEAD", content: text });
-      }
-      await prisma.conversation.update({
-        where: { id: existing.id },
-        data: { lastMessageAt: new Date() },
-      });
-      await createLog({
-        type: "MESSAGE_RECEIVED",
-        message: `Mensagem de ${event.sender?.name || senderId} ignorada pelo bot (conversa em atendimento humano)`,
-        campaignId: lead.campaignId,
-        leadId: lead.id,
-        payload: { chatId: event.chat_id, message: text },
-      });
-      return;
+  if (lead) {
+    const campaign = await prisma.campaign.findUnique({ where: { id: lead.campaignId } });
+    if (campaign && lead.providerId && (!lead.name || lead.name === lead.providerId)) {
+      await syncLeadNameFromProfile({ accountId: account.id, lead: lead as never });
     }
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { lastMessageAt: new Date(), lastMessageText: text, status: "RESPONDED" },
+    });
+    await createLog({
+      type: "MESSAGE_RECEIVED",
+      message: `Mensagem recebida de ${event.sender?.name || senderId}${text ? `: "${text}"` : ""}`,
+      campaignId: lead.campaignId,
+      leadId: lead.id,
+      accountId: account.id,
+      payload: { chatId: event.chat_id, message: text },
+    });
+    if (campaign) await advanceOnEvent(campaign, { ...lead, status: "RESPONDED" });
+    if (campaign && hasFlow(campaign.flow)) return;
   }
 
-  const delay = randomInt(
-    campaign.chatbotReplyDelayMin * 1000,
-    campaign.chatbotReplyDelayMax * 1000,
-  );
+  if (!agent || !agent.enabled) {
+    await createLog({
+      type: "AGENT_DISABLED",
+      message: `Mensagem de ${event.sender?.name || senderId} ignorada (agente nativo desligado)`,
+      accountId: account.id,
+      payload: { chatId: event.chat_id, message: text },
+    });
+    return;
+  }
+  if (!hasChat) return;
+
+  const conversation = await getOrCreateConversation({
+    accountId: account.id,
+    campaignId: lead?.campaignId ?? null,
+    leadId: lead?.id ?? null,
+    unipileChatId: event.chat_id as string,
+  });
+
+  if (isConversationLocked(conversation.status)) {
+    if (text) {
+      await recordMessage({ conversationId: conversation.id, role: "LEAD", content: text });
+    }
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: new Date() },
+    });
+    await createLog({
+      type: "MESSAGE_RECEIVED",
+      message: `Mensagem de ${event.sender?.name || senderId} ignorada pelo agente (conversa em atendimento humano)`,
+      accountId: account.id,
+      payload: { chatId: event.chat_id, message: text },
+    });
+    return;
+  }
+
+  const delay = randomInt(agent.replyDelayMin * 1000, agent.replyDelayMax * 1000);
   await chatbotQueue.add(
     "reply",
     {
+      accountId: account.id,
       chatId: event.chat_id,
-      leadId: lead.id,
-      campaignId: campaign.id,
+      leadId: lead?.id ?? null,
+      campaignId: lead?.campaignId ?? null,
       message: text,
     },
     {
@@ -159,7 +207,7 @@ async function handleNewRelation(event: RelationWebhook): Promise<void> {
 
   const candidates = await prisma.lead.findMany({
     where: { providerId },
-    include: { campaign: { select: { status: true, chatbotEnabled: true } } },
+    include: { campaign: { select: { status: true } } },
   });
   const lead = pickBestLead(candidates);
   if (!lead) return;
