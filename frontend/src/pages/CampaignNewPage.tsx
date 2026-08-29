@@ -2,14 +2,9 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Workflow } from "lucide-react";
 import { api } from "../lib/api";
-import type { Account, CampaignPayload, ChatbotConfig, Flow } from "../types";
+import type { Account, CampaignPayload, Flow } from "../types";
 import { FlowEditor } from "../components/FlowEditor";
 import { emptyFlow } from "../lib/flow";
-import {
-  ChatbotConfigSection,
-  defaultChatbotConfig,
-  sanitizeChatbotConfig,
-} from "../components/ChatbotConfigSection";
 import { useToast, toastFromError } from "../components/Toast";
 import { PageLoader } from "../components/Spinner";
 
@@ -36,7 +31,6 @@ export function CampaignNewPage() {
     workEndHour: 18,
     maxLeads: 1000,
   });
-  const [chatbot, setChatbot] = useState<ChatbotConfig>(() => defaultChatbotConfig());
   const [flow, setFlow] = useState<Flow>(emptyFlow());
 
   useEffect(() => {
@@ -69,7 +63,6 @@ export function CampaignNewPage() {
     try {
       const created = await api.post<{ id: string }>("/campaigns", {
         ...form,
-        ...sanitizeChatbotConfig(chatbot),
         flow,
       });
       toast("success", "Campanha criada com sucesso");
@@ -336,7 +329,6 @@ export function CampaignNewPage() {
           </p>
         </section>
 
-        <ChatbotConfigSection value={chatbot} onChange={setChatbot} />
         <div className="flex items-center justify-end gap-3 pb-8">
           <Link to="/campanhas" className="btn btn-secondary">
             Cancelar

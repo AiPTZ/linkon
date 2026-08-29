@@ -7,8 +7,9 @@ interface InboxItem {
   id: string;
   status: string;
   lastMessageAt: Date;
-  lead: { name: string | null; headline: string | null; profileUrl: string | null };
-  campaign: { id: string; name: string; mode: string };
+  lead: { name: string | null; headline: string | null; profileUrl: string | null } | null;
+  campaign: { id: string; name: string; mode: string } | null;
+  account: { username: string | null };
   lastMessage: string | null;
   unread: number;
 }
@@ -19,14 +20,15 @@ export async function listInbox(userId: string | null): Promise<{
 }> {
   const [conversations, needsHuman] = await Promise.all([
     prisma.conversation.findMany({
-      where: { campaign: { userId } },
+      where: { account: { userId } },
       orderBy: [{ status: "asc" }, { lastMessageAt: "desc" }],
       include: {
         lead: { select: { name: true, headline: true, profileUrl: true } },
         campaign: { select: { id: true, name: true, mode: true } },
+        account: { select: { username: true } },
       },
     }),
-    prisma.conversation.count({ where: { campaign: { userId }, status: "NEEDS_HUMAN" } }),
+    prisma.conversation.count({ where: { account: { userId }, status: "NEEDS_HUMAN" } }),
   ]);
 
   const items: InboxItem[] = [];
@@ -45,6 +47,7 @@ export async function listInbox(userId: string | null): Promise<{
       lastMessageAt: c.lastMessageAt,
       lead: c.lead,
       campaign: c.campaign,
+      account: c.account,
       lastMessage: last?.content ?? null,
       unread,
     });
@@ -54,7 +57,7 @@ export async function listInbox(userId: string | null): Promise<{
 
 async function assertAccess(conversationId: string, userId: string | null) {
   const conv = await prisma.conversation.findFirst({
-    where: { id: conversationId, campaign: { userId } },
+    where: { id: conversationId, account: { userId } },
   });
   if (!conv) throw new ApiError(404, "Conversa não encontrada");
   return conv;

@@ -140,7 +140,7 @@ export function InboxPage() {
 
   const items = inbox.items.filter((c) => {
     if (filter === "ALL") return true;
-    const isDisparo = c.campaign.mode === "DISPARO";
+    const isDisparo = c.campaign ? c.campaign.mode === "DISPARO" : false;
     return filter === "DISPARO" ? isDisparo : !isDisparo;
   });
 
@@ -190,24 +190,26 @@ export function InboxPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-medium text-cream">
-                    {shortName(c.lead.name, "Lead")}
+                    {shortName(c.lead?.name, "Lead")}
                   </span>
                   <span className="whitespace-nowrap text-[11px] text-cream/30">
                     {formatDateTime(c.lastMessageAt)}
                   </span>
                 </div>
-                <div className="truncate text-xs text-cream/45">{c.lead.headline || c.campaign.name}</div>
+                <div className="truncate text-xs text-cream/45">{c.lead?.headline || (c.campaign ? c.campaign.name : `Agente nativo · ${c.account.username ?? "minha conta"}`)}</div>
                 <div className="mt-1 truncate text-xs text-cream/60">{c.lastMessage}</div>
               </div>
               <div className="flex flex-col items-end gap-1">
                 <span
                   className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    c.campaign.mode === "DISPARO"
+                    c.campaign && c.campaign.mode === "DISPARO"
                       ? "bg-sky-500/15 text-sky-400"
-                      : "bg-ink-500 text-cream/50"
+                      : c.campaign
+                        ? "bg-ink-500 text-cream/50"
+                        : "bg-emerald-500/15 text-emerald-400"
                   }`}
                 >
-                  {c.campaign.mode === "DISPARO" ? "Disparo" : "Convite"}
+                  {c.campaign ? (c.campaign.mode === "DISPARO" ? "Disparo" : "Convite") : "Agente"}
                 </span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.status === "NEEDS_HUMAN" ? "bg-amber-500/15 text-amber-400" : "bg-ink-500 text-cream/50"}`}
@@ -230,9 +232,9 @@ export function InboxPage() {
               <div className="border-b border-ink-400 px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-medium text-cream">{shortName(selected.lead.name, "Lead")}</div>
+                    <div className="font-medium text-cream">{shortName(selected.lead?.name, "Lead")}</div>
                     <div className="truncate text-xs text-cream/45">
-                      {selected.lead.headline || selected.campaign.name}
+                      {selected.lead?.headline || (selected.campaign ? selected.campaign.name : `Agente nativo · ${selected.account.username ?? "minha conta"}`)}
                     </div>
                   </div>
                   {selected.status === "BOT" ? (

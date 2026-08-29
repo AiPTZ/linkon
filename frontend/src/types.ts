@@ -91,12 +91,6 @@ export interface Account {
   user?: { id: string; username: string | null } | null;
 }
 
-export interface ChatbotRule {
-  matchType: "contains" | "keywords" | "regex";
-  pattern: string;
-  reply: string;
-}
-
 export interface KnowledgeBaseEntry {
   q: string;
   a: string;
@@ -113,21 +107,53 @@ export interface ChatbotKnowledgeBase {
 export type ChatbotMode = "RULES" | "LLM";
 export type InitialMessageMode = "TEMPLATE" | "AI";
 
-export interface ChatbotConfig {
-  chatbotEnabled: boolean;
-  chatbotMode: ChatbotMode;
-  chatbotKnowledgeBase: ChatbotKnowledgeBase;
-  chatbotTone: string;
-  chatbotInitialMessageMode: InitialMessageMode;
-  chatbotInitialTemplate: string;
-  chatbotTransferMessage: string;
-  chatbotMaxTurns: number;
-  chatbotDefaultReply: string;
-  chatbotRules: ChatbotRule[];
-  chatbotReplyDelayMin: number;
-  chatbotReplyDelayMax: number;
-  chatbotStopKeywords: string[];
-  maxRepliesPerLead: number;
+export interface NativeAgent {
+  id: string;
+  accountId: string;
+  enabled: boolean;
+  knowledgeBase: string;
+  tone: string;
+  transferMessage: string;
+  replyDelayMin: number;
+  replyDelayMax: number;
+  maxTurns: number;
+  replyDailyLimit: number;
+  replyWeeklyLimit: number;
+  initialMessageMode: InitialMessageMode;
+  initialTemplate: string;
+}
+
+export interface AgentConfig {
+  enabled: boolean;
+  knowledgeBase: ChatbotKnowledgeBase;
+  tone: string;
+  transferMessage: string;
+  replyDelayMin: number;
+  replyDelayMax: number;
+  maxTurns: number;
+  replyDailyLimit: number;
+  replyWeeklyLimit: number;
+  initialMessageMode: InitialMessageMode;
+  initialTemplate: string;
+}
+
+export interface AgentPayload {
+  enabled?: boolean;
+  knowledgeBase?: ChatbotKnowledgeBase;
+  tone?: string;
+  transferMessage?: string;
+  replyDelayMin?: number;
+  replyDelayMax?: number;
+  maxTurns?: number;
+  replyDailyLimit?: number;
+  replyWeeklyLimit?: number;
+  initialMessageMode?: InitialMessageMode;
+  initialTemplate?: string;
+}
+
+export interface AgentAccountListItem {
+  account: { id: string; username: string | null; unipileAccountId: string; status: string };
+  agent: NativeAgent | null;
 }
 
 export interface Campaign {
@@ -145,20 +171,6 @@ export interface Campaign {
   maxDelayMin: number;
   workStartHour: number;
   workEndHour: number;
-  chatbotEnabled: boolean;
-  chatbotRules: string;
-  chatbotMode: ChatbotMode;
-  chatbotKnowledgeBase: string;
-  chatbotTone: string;
-  chatbotInitialMessageMode: InitialMessageMode;
-  chatbotInitialTemplate: string;
-  chatbotTransferMessage: string;
-  chatbotMaxTurns: number;
-  chatbotDefaultReply: string;
-  chatbotReplyDelayMin: number;
-  chatbotReplyDelayMax: number;
-  chatbotStopKeywords: string;
-  maxRepliesPerLead: number;
   flow: string;
   invitesSentToday: number;
   dateOfInviteCount: string | null;
@@ -265,20 +277,6 @@ export interface CampaignPayload {
   maxDelayMin?: number;
   workStartHour?: number;
   workEndHour?: number;
-  chatbotEnabled?: boolean;
-  chatbotRules?: ChatbotRule[];
-  chatbotMode?: ChatbotMode;
-  chatbotKnowledgeBase?: ChatbotKnowledgeBase;
-  chatbotTone?: string;
-  chatbotInitialMessageMode?: InitialMessageMode;
-  chatbotInitialTemplate?: string;
-  chatbotTransferMessage?: string;
-  chatbotMaxTurns?: number;
-  chatbotDefaultReply?: string;
-  chatbotReplyDelayMin?: number;
-  chatbotReplyDelayMax?: number;
-  chatbotStopKeywords?: string[];
-  maxRepliesPerLead?: number;
   maxLeads?: number;
   flow?: Flow;
 }
@@ -345,8 +343,9 @@ export interface ConversationSummary {
   lastMessageAt: string;
   lastMessage: string | null;
   unread: number;
-  lead: { name: string | null; headline: string | null; profileUrl: string | null };
-  campaign: { id: string; name: string; mode: "SEARCH" | "SWEEP" | "DISPARO" };
+  lead: { name: string | null; headline: string | null; profileUrl: string | null } | null;
+  campaign: { id: string; name: string; mode: "SEARCH" | "SWEEP" | "DISPARO" } | null;
+  account: { username: string | null };
 }
 
 export interface InboxListResponse {
