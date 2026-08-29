@@ -42,7 +42,7 @@ export async function runEvaluation(input: {
     let decision;
     try {
       decision = await generateDecision({
-        campaignName: input.campaignName,
+        productName: input.campaignName,
         knowledgeBase,
         tone: input.tone,
         leadName: c.context?.leadName ?? "Lead Teste",
