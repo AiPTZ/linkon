@@ -56,7 +56,7 @@ type Tab = "overview" | "users" | "accounts" | "global" | "logs";
 
 const QUEUE_LABELS = {
   invites: "Convites",
-  chatbot: "Chatbot",
+  chatbot: "Agente",
   search: "Busca",
 } as const;
 

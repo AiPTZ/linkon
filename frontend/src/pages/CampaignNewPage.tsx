@@ -210,7 +210,7 @@ export function CampaignNewPage() {
           <p className="text-xs text-cream/40">
             Monte o funil em blocos conectáveis: convite (com ou sem mensagem), aguardar, quando
             aceitar, quando responder, condições e parar. Quando o fluxo está preenchido ele comanda
-            todos os envios; com o fluxo vazio, a campanha usa o convite padrão + chatbot.
+            todos os envios; com o fluxo vazio, a campanha usa o convite padrão + agente nativo.
           </p>
           <FlowEditor
             initialFlow={flow}

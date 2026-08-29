@@ -42,7 +42,7 @@ const FEATURES = [
   },
   {
     icon: Bot,
-    title: "Chatbot de resposta automática",
+    title: "Agente de resposta automática",
     desc: "Regras de palavras-chave respondem automaticamente os contatos que aceitam seu convite, sem intervenção manual.",
   },
   {
@@ -75,7 +75,7 @@ const STEPS = [
     desc: "Escreva o convite personalizado, defina a janela de horário, atrasos e os limites diários/semanais de envio.",
   },
   {
-    title: "Ative o chatbot (opcional)",
+    title: "Ative o agente (opcional)",
     desc: "Crie regras de palavras-chave e respostas. Quem aceitar e responder fora do seu horário é atendido automaticamente.",
   },
   {

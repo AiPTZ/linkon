@@ -54,7 +54,7 @@ export function FlowPage() {
       <h1 className="font-serif text-3xl font-semibold gold-gradient-text">Fluxo de mensagens</h1>
       <p className="mt-1 text-sm text-cream/50">
         {campaign.name} · Monte o funil em blocos conectáveis. Quando o fluxo estiver preenchido, ele
-        comanda todos os envios; o chatbot e a mensagem de convite padrão são usados apenas quando o
+        comanda todos os envios; o agente nativo e a mensagem de convite padrão são usados apenas quando o
         fluxo estiver vazio.
       </p>
 

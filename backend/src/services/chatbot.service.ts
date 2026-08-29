@@ -1,5 +1,3 @@
-import type { Campaign } from "@prisma/client";
-
 export interface ChatbotRule {
   matchType: "contains" | "keywords" | "regex";
   pattern: string;
@@ -45,14 +43,6 @@ export function ruleMatches(rule: ChatbotRule, message: string): boolean {
     default:
       return false;
   }
-}
-
-export function generateReply(campaign: Campaign, message: string): string | null {
-  const rules = parseRules(campaign.chatbotRules);
-  for (const rule of rules) {
-    if (ruleMatches(rule, message)) return rule.reply;
-  }
-  return campaign.chatbotDefaultReply || null;
 }
 
 export function containsStopKeyword(message: string, stopKeywords: string[]): boolean {

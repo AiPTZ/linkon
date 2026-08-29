@@ -57,8 +57,8 @@ const STEPS: Step[] = [
   },
   {
     n: 6,
-    title: "Use fluxo e chatbot (opcional)",
-    text: "No Fluxo, monte um funil com blocos de mensagem, espera e reação a respostas. Com o chatbot ativo, o sistema responde automaticamente mensagens recebidas conforme as regras definidas.",
+    title: "Use fluxo e agente (opcional)",
+    text: "No Fluxo, monte um funil com blocos de mensagem, espera e reação a respostas. Com o agente ativo, o sistema responde automaticamente mensagens recebidas conforme as regras definidas.",
     icon: Workflow,
   },
 ];

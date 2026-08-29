@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   containsStopKeyword,
-  generateReply,
   parseKeywords,
   parseRules,
   ruleMatches,
   type ChatbotRule,
 } from "./chatbot.service";
-
-const baseCampaign = {
-  chatbotRules: "[]",
-  chatbotDefaultReply: "",
-} as unknown as Parameters<typeof generateReply>[0];
 
 describe("ruleMatches", () => {
   it("matches 'contains' case-insensitively", () => {
@@ -35,31 +29,6 @@ describe("ruleMatches", () => {
   it("does not throw on invalid regex", () => {
     const rule: ChatbotRule = { matchType: "regex", pattern: "[", reply: "ok" };
     expect(ruleMatches(rule, "qualquer texto")).toBe(false);
-  });
-});
-
-describe("generateReply", () => {
-  it("returns matching rule reply before default", () => {
-    const campaign = {
-      ...baseCampaign,
-      chatbotRules: JSON.stringify([
-        { matchType: "contains", pattern: "preço", reply: "O preço é 100." },
-      ]),
-      chatbotDefaultReply: "padrão",
-    } as Parameters<typeof generateReply>[0];
-    expect(generateReply(campaign, "Qual o preço?")).toBe("O preço é 100.");
-  });
-
-  it("falls back to default reply", () => {
-    const campaign = {
-      ...baseCampaign,
-      chatbotDefaultReply: "padrão",
-    } as Parameters<typeof generateReply>[0];
-    expect(generateReply(campaign, "olá")).toBe("padrão");
-  });
-
-  it("returns null when no rule and no default", () => {
-    expect(generateReply(baseCampaign, "olá")).toBeNull();
   });
 });
 

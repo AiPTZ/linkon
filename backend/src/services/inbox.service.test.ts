@@ -30,7 +30,7 @@ describe("listInbox", () => {
     expect(res.items[0].unread).toBe(0);
     expect(res.needsHuman).toBe(1);
     const arg = (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(arg.where).toEqual({ campaign: { userId: "U1" } });
+    expect(arg.where).toEqual({ account: { userId: "U1" } });
     expect(arg.include.campaign.select).toMatchObject({ id: true, name: true, mode: true });
   });
 
@@ -39,7 +39,7 @@ describe("listInbox", () => {
     (prisma.conversation.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
     await listInbox(null);
     const arg = (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(arg.where).toEqual({ campaign: { userId: null } });
+    expect(arg.where).toEqual({ account: { userId: null } });
   });
 });
 
