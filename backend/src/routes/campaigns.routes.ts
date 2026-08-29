@@ -55,6 +55,7 @@ const campaignObjectSchema = z.object({
   workStartHour: z.number().int().min(0).max(23).default(9),
   workEndHour: z.number().int().min(0).max(23).default(18),
   maxLeads: z.number().int().min(10).max(5000).default(1000),
+  agentEnabled: z.boolean().default(true),
   flow: flowSchema.optional(),
 });
 
@@ -80,6 +81,7 @@ function toData(body: z.infer<typeof campaignSchema> | z.infer<typeof updateCamp
     "workStartHour",
     "workEndHour",
     "maxLeads",
+    "agentEnabled",
   ] as const;
   for (const k of keys) {
     if (body[k] !== undefined) data[k] = body[k];

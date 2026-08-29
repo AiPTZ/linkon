@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Bot,
   CheckCheck,
   Download,
   ExternalLink,
@@ -175,6 +176,20 @@ export function CampaignDetailPage() {
       await api.delete(`/campaigns/${id}`);
       toast("success", "Campanha excluída");
       navigate(isBroadcast ? "/disparos" : "/campanhas");
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onToggleAgent() {
+    if (!campaign) return;
+    setBusy("agent");
+    try {
+      await api.put(`/campaigns/${id}`, { agentEnabled: !campaign.agentEnabled });
+      toast("success", campaign.agentEnabled ? "Bot desativado nesta campanha." : "Bot ativado nesta campanha.");
+      loadCampaign();
     } catch (err) {
       toastFromError(toast, err);
     } finally {
@@ -412,6 +427,27 @@ export function CampaignDetailPage() {
         <span className="inline-flex items-center gap-2 text-cream/70">
           <Send className="h-4 w-4 text-gold-500" />
           Atraso: {campaign.minDelayMin}–{campaign.maxDelayMin} min
+        </span>
+        <span className="inline-flex items-center gap-2 text-cream/70">
+          <Bot className="h-4 w-4 text-gold-500" />
+          Bot com IA
+          <button
+            type="button"
+            role="switch"
+            aria-checked={campaign.agentEnabled}
+            disabled={busy !== null}
+            onClick={onToggleAgent}
+            title={campaign.agentEnabled ? "Desativar o bot nesta campanha" : "Ativar o bot nesta campanha"}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/50 disabled:opacity-50 ${
+              campaign.agentEnabled ? "bg-gold-500" : "bg-ink-500"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                campaign.agentEnabled ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </button>
         </span>
         {campaign.mode === "DISPARO" ? (
           <span className="inline-flex items-center gap-1.5 text-cream/70">

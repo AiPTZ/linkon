@@ -65,7 +65,8 @@ describe("handleWebhookEvent", () => {
   const account = { id: "A1", unipileAccountId: "UA1", providerId: "OWN1" };
 
   it("ignora mensagem de conta própria (anti-loop)", async () => {
-    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     await handleWebhookEvent({
       event: "message_received",
       message: "olá",
@@ -75,6 +76,22 @@ describe("handleWebhookEvent", () => {
     });
     expect(createLog).toHaveBeenCalledWith(expect.objectContaining({ type: "BOT_SELF_MESSAGE" }));
     expect(chatbotQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("não descarta como self quando o remetente é perfil de outra conta (lead cross-account)", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ enabled: false });
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT1",
+      account_info: { user_id: "OWN1", account_id: "UA1" },
+      sender: { attendee_provider_id: "OTHER-ACCOUNT-PROFILE", name: "Renata" },
+    });
+    expect(createLog).toHaveBeenCalledWith(expect.objectContaining({ type: "AGENT_DISABLED" }));
+    expect(createLog).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BOT_SELF_MESSAGE" }));
   });
 
   it("ignora mensagem quando o agente nativo está desligado", async () => {
@@ -140,6 +157,62 @@ describe("handleWebhookEvent", () => {
     expect(chatbotQueue.add).toHaveBeenCalledWith(
       "reply",
       expect.objectContaining({ accountId: "A1", chatId: "CHAT2", campaignId: null, leadId: null, message: "olá" }),
+      expect.any(Object),
+    );
+  });
+
+  it("ignora mensagem quando o bot está desativado na campanha (agentEnabled=false)", async () => {
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      replyDelayMin: 30,
+      replyDelayMax: 30,
+    });
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      lead({ id: "L1", campaignId: "C1", providerId: "P1", name: "João" }),
+    ]);
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "C1",
+      accountId: "A1",
+      flow: "",
+      agentEnabled: false,
+    });
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT1",
+      account_id: "UA1",
+      account_info: { user_id: "OWN1" },
+      sender: { attendee_provider_id: "P1", name: "João" },
+    });
+    expect(createLog).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "AGENT_DISABLED", campaignId: "C1" }),
+    );
+    expect(chatbotQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("resolve a conta pelo account_id no top-level do payload (formato real do unipile)", async () => {
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      replyDelayMin: 30,
+      replyDelayMax: 30,
+    });
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getOrCreateConversation as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "BOT" });
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT3",
+      account_id: "UA1",
+      account_info: { user_id: "OWN1" },
+      sender: { attendee_provider_id: "P9", name: "Maria" },
+    });
+    expect(chatbotQueue.add).toHaveBeenCalledWith(
+      "reply",
+      expect.objectContaining({ accountId: "A1", chatId: "CHAT3", message: "olá" }),
       expect.any(Object),
     );
   });

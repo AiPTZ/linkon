@@ -41,6 +41,7 @@ export function DisparoNewPage() {
   const [useFlow, setUseFlow] = useState(false);
   const [flow, setFlow] = useState<Flow>(emptyFlow());
   const [flowOpen, setFlowOpen] = useState(false);
+  const [agentEnabled, setAgentEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const connected = useMemo(
@@ -90,6 +91,7 @@ export function DisparoNewPage() {
         workStartHour: strategy.workStartHour,
         workEndHour: strategy.workEndHour,
         maxLeads: strategy.maxLeads,
+        agentEnabled,
         flow: useFlow ? flow : undefined,
       };
       const created = await api.post<{ id: string }>("/campaigns", payload);
@@ -179,6 +181,29 @@ export function DisparoNewPage() {
             <code className="rounded bg-ink-700 px-1 py-0.5 text-gold-400">{"{cargo}"}</code> para
             personalizar com o nome e o cargo de cada contato.
           </p>
+        </section>
+
+        <section className="card p-5">
+          <h2 className="font-serif text-lg text-gold-400">Bot com IA nesta campanha</h2>
+          <label className="mt-3 flex items-start gap-3 text-sm text-cream/70">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-gold-500"
+              checked={agentEnabled}
+              onChange={(e) => setAgentEnabled(e.target.checked)}
+              aria-label="Responder automaticamente às respostas dos contatos"
+            />
+            <span>
+              <span className="font-medium text-cream">
+                Responder automaticamente às respostas dos contatos
+              </span>
+              <span className="mt-0.5 block text-xs text-cream/40">
+                Quando desligado, as respostas dos contatos desta campanha são apenas registradas no
+                Inbox (sem resposta automática do bot e sem transferência para humano). O agente da
+                conta continua disponível em "Agente nativo".
+              </span>
+            </span>
+          </label>
         </section>
 
         <section className="card">

@@ -124,6 +124,18 @@ describe("handleIncomingMessage", () => {
     expect(await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "oi" })).toBe("none");
   });
 
+  it("retorna none quando o bot está desativado na campanha", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(agent);
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...(campaign as Record<string, unknown>),
+      agentEnabled: false,
+    });
+    expect(
+      await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "oi", campaignId: "C1", leadId: "L1" }),
+    ).toBe("none");
+  });
+
   it("transfere para humano ao atingir o limite de respostas", async () => {
     (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
     (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(agent);

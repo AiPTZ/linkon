@@ -177,6 +177,7 @@ export interface Campaign {
   invitesSentWeek: number;
   weekStartDate: string | null;
   maxLeads: number;
+  agentEnabled: boolean;
   nextInviteAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -278,6 +279,7 @@ export interface CampaignPayload {
   workStartHour?: number;
   workEndHour?: number;
   maxLeads?: number;
+  agentEnabled?: boolean;
   flow?: Flow;
 }
 

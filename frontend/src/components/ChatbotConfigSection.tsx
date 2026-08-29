@@ -95,31 +95,48 @@ export function AgentConfigSection({ value, onChange, title = "Agente nativo" }:
 
   return (
     <section className="card">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between p-5 text-left"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <span className="flex items-center gap-2 font-serif text-lg text-gold-400">
+      <div className="flex w-full items-center justify-between p-5 text-left">
+        <button
+          type="button"
+          className="flex items-center gap-2 font-serif text-lg text-gold-400"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
           <Bot className="h-5 w-5" />
           {title}
-        </span>
+        </button>
         <span className="flex items-center gap-2">
-          <span
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          <button
+            type="button"
+            role="switch"
+            aria-checked={value.enabled}
+            aria-label={`Ativar ${title}`}
+            title={value.enabled ? "Clique para desativar o agente" : "Clique para ativar o agente"}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/50 ${
               value.enabled ? "bg-gold-500" : "bg-ink-500"
             }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              update({ enabled: !value.enabled });
+            }}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                 value.enabled ? "translate-x-4" : "translate-x-0.5"
               }`}
             />
-          </span>
-          <ChevronDown className={`h-4 w-4 text-cream/40 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          <button
+            type="button"
+            className="flex items-center"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-label={open ? "Recolher configurações" : "Expandir configurações"}
+          >
+            <ChevronDown className={`h-4 w-4 text-cream/40 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
         </span>
-      </button>
+      </div>
 
       {open && (
         <div className="space-y-4 border-t border-ink-400 p-5">

@@ -127,6 +127,8 @@ export async function handleIncomingMessage(input: {
     : null;
   const lead = input.leadId ? await prisma.lead.findUnique({ where: { id: input.leadId } }) : null;
 
+  if (campaign && campaign.agentEnabled === false) return "none";
+
   const conversation = await getOrCreateConversation({
     accountId: account.id,
     campaignId: input.campaignId,

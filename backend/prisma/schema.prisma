@@ -75,6 +75,7 @@ model Campaign {
   invitesSentWeek      Int        @default(0)
   weekStartDate        DateTime?
   maxLeads             Int        @default(1000)
+  agentEnabled         Boolean    @default(true)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   userId               String?

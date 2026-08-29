@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Campaign } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { chatbotQueue } from "../services/queue.service";
 import { createLog } from "../services/log.service";
@@ -15,6 +16,7 @@ interface MessageWebhook {
   event?: string;
   message?: string;
   chat_id?: string;
+  account_id?: string;
   account_info?: { user_id?: string; account_id?: string };
   sender?: { attendee_provider_id?: string; name?: string };
   [key: string]: unknown;
@@ -82,30 +84,26 @@ async function resolveAccount(input: {
   return null;
 }
 
-async function isOwnAccount(senderId: string): Promise<boolean> {
-  const found = await prisma.account.findFirst({ where: { providerId: senderId } });
-  return Boolean(found);
-}
-
 async function handleMessageReceived(event: MessageWebhook): Promise<void> {
   const senderId = event.sender?.attendee_provider_id;
   const ownId = event.account_info?.user_id;
   if (!senderId) return;
 
-  if (senderId === ownId || (await isOwnAccount(senderId))) {
+  const account = await resolveAccount({
+    accountId: event.account_id ?? event.account_info?.account_id,
+    userId: event.account_info?.user_id,
+  });
+  if (!account) return;
+
+  if (senderId === ownId || senderId === account.providerId) {
     await createLog({
       type: "BOT_SELF_MESSAGE",
       message: `Mensagem de conta própria ignorada (${senderId})`,
+      accountId: account.id,
       payload: { chatId: event.chat_id },
     });
     return;
   }
-
-  const account = await resolveAccount({
-    accountId: event.account_info?.account_id,
-    userId: event.account_info?.user_id,
-  });
-  if (!account) return;
 
   if (ownId && account.providerId !== ownId) {
     await prisma.account.update({
@@ -125,8 +123,9 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
   });
   const lead = pickBestLead(candidates);
 
+  let campaign: Campaign | null = null;
   if (lead) {
-    const campaign = await prisma.campaign.findUnique({ where: { id: lead.campaignId } });
+    campaign = await prisma.campaign.findUnique({ where: { id: lead.campaignId } });
     if (campaign && lead.providerId && (!lead.name || lead.name === lead.providerId)) {
       await syncLeadNameFromProfile({ accountId: account.id, lead: lead as never });
     }
@@ -144,6 +143,18 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
     });
     if (campaign) await advanceOnEvent(campaign, { ...lead, status: "RESPONDED" });
     if (campaign && hasFlow(campaign.flow)) return;
+  }
+
+  if (lead && campaign && campaign.agentEnabled === false) {
+    await createLog({
+      type: "AGENT_DISABLED",
+      message: `Mensagem de ${event.sender?.name || senderId} ignorada (bot desativado nesta campanha)`,
+      campaignId: campaign.id,
+      leadId: lead.id,
+      accountId: account.id,
+      payload: { chatId: event.chat_id, message: text },
+    });
+    return;
   }
 
   if (!agent || !agent.enabled) {
