@@ -7,10 +7,34 @@ import { apiRouter } from "./routes";
 import { startScheduler } from "./scheduler";
 import { ensureAdminSeeded } from "./services/user.service";
 import { logger } from "./utils/logger";
+import { securityHeaders } from "./middleware/security";
+import { rateLimit } from "./middleware/rateLimit";
 
 const app = express();
 
-app.use(cors({ origin: true, credentials: true }));
+app.set("trust proxy", env.TRUST_PROXY);
+
+app.use(securityHeaders);
+
+const corsOrigins = env.CORS_ORIGINS.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (env.NODE_ENV !== "production" || !origin) {
+        callback(null, true);
+        return;
+      }
+      if (corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
+    credentials: true,
+  }),
+);
 
 app.use((req: Request, _res: Response, next: NextFunction) => {
   const chunks: Buffer[] = [];

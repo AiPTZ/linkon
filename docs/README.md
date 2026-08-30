@@ -7,6 +7,7 @@
 | Documento | Conteúdo |
 | --- | --- |
 | [README](../README.md) | Porta de entrada: o que é, como rodar, contas demo, segurança |
+| [HANDOFF.md](./HANDOFF.md) | Passagem de bastão: estado atual, segurança/Cloudflare, operação e gotchas |
 | [PRODUCT.md](./PRODUCT.md) | O produto: visão, personas, funcionalidades, papéis e contas demo |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Arquitetura: stack, componentes, modelo de dados, filas e fluxos |
 | [API.md](./API.md) | Referência completa da API REST (100% das rotas) |
@@ -16,6 +17,7 @@
 ## Mapas rápidos
 
 - **Quer rodar agora?** Vá para o [README](../README.md#como-rodar).
+- **Quer assumir o projeto?** Leia [HANDOFF.md](./HANDOFF.md).
 - **Quer entender o produto?** Leia [PRODUCT.md](./PRODUCT.md).
 - **Quer consumir a API?** Leia [API.md](./API.md).
 - **Quer integrar com a Unipile?** Leia [INTEGRATION.md](./INTEGRATION.md).

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { timingSafeEqual } from "crypto";
 import type { Campaign } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { chatbotQueue } from "../services/queue.service";
@@ -9,8 +10,18 @@ import { getOrCreateConversation, recordMessage, isConversationLocked } from "..
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { randomInt } from "../utils/time";
+import { rateLimit } from "../middleware/rateLimit";
 
 export const webhooksRouter = Router();
+
+webhooksRouter.use(rateLimit({ windowMs: 60_000, max: env.RATE_LIMIT_WEBHOOK_MAX }));
+
+function secretMatches(input: unknown): boolean {
+  const provided = typeof input === "string" ? input : "";
+  const expected = env.UNIPILE_WEBHOOK_SECRET;
+  if (!expected || provided.length === 0 || provided.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+}
 
 interface MessageWebhook {
   event?: string;
@@ -278,7 +289,7 @@ webhooksRouter.post(
   "/unipile",
   (req, res) => {
     const secret = req.headers["unipile-auth"] ?? req.headers["authorization"];
-    if (env.UNIPILE_WEBHOOK_SECRET && secret !== env.UNIPILE_WEBHOOK_SECRET) {
+    if (!secretMatches(secret)) {
       logger.warn(`[webhook] rejected: invalid signature`);
       return res.status(401).json({ error: "invalid signature" });
     }
@@ -299,7 +310,7 @@ webhooksRouter.get(
   "/unipile",
   (_req, res) => {
     const secret = _req.headers["unipile-auth"] ?? _req.headers["authorization"];
-    if (env.UNIPILE_WEBHOOK_SECRET && secret !== env.UNIPILE_WEBHOOK_SECRET) {
+    if (!secretMatches(secret)) {
       return res.status(401).json({ error: "invalid signature" });
     }
     res.status(200).json({ ok: true });

@@ -1,23 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
+import { getClientIp } from "../utils/clientIp";
 
 interface Bucket {
   count: number;
   resetAt: number;
 }
 
-const buckets = new Map<string, Bucket>();
-
 const MAX_ENTRIES = 10_000;
 
-function sweep(now: number): void {
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now) buckets.delete(key);
-  }
-  if (buckets.size > MAX_ENTRIES) {
-    const oldest = [...buckets.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt)[0];
-    if (oldest) buckets.delete(oldest[0]);
-  }
-}
+const registry = new Set<Map<string, Bucket>>();
 
 export interface RateLimitOptions {
   windowMs: number;
@@ -27,7 +18,19 @@ export interface RateLimitOptions {
 
 export function rateLimit(options: RateLimitOptions) {
   const { windowMs, max } = options;
-  const keyOf = options.key ?? ((req: Request) => req.ip ?? "unknown");
+  const keyOf = options.key ?? getClientIp;
+  const buckets = new Map<string, Bucket>();
+  registry.add(buckets);
+
+  function sweep(now: number): void {
+    for (const [key, bucket] of buckets) {
+      if (bucket.resetAt <= now) buckets.delete(key);
+    }
+    if (buckets.size > MAX_ENTRIES) {
+      const oldest = [...buckets.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt)[0];
+      if (oldest) buckets.delete(oldest[0]);
+    }
+  }
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const now = Date.now();
@@ -54,5 +57,5 @@ export function rateLimit(options: RateLimitOptions) {
 }
 
 export function _clearRateLimitBucketsForTests(): void {
-  buckets.clear();
+  for (const buckets of registry) buckets.clear();
 }

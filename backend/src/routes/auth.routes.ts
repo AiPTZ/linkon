@@ -14,13 +14,14 @@ import {
 } from "../services/user.service";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { rateLimit } from "../middleware/rateLimit";
+import { env } from "../config/env";
 import { ah } from "./handler";
 
 export const authRouter = Router();
 
 const loginSchema = z.object({ username: z.string().min(1), password: z.string().min(1) });
 
-const loginRateLimit = rateLimit({ windowMs: 60_000, max: 10 });
+const loginRateLimit = rateLimit({ windowMs: 60_000, max: env.RATE_LIMIT_LOGIN_MAX });
 
 authRouter.post("/login", loginRateLimit, ah(async (req, res) => {
   const body = loginSchema.parse(req.body);
@@ -34,7 +35,9 @@ const registerSchema = z.object({
   whatsapp: z.string().max(25).optional(),
 });
 
-authRouter.post("/register", ah(async (req, res) => {
+const registerRateLimit = rateLimit({ windowMs: 15 * 60_000, max: env.RATE_LIMIT_REGISTER_MAX });
+
+authRouter.post("/register", registerRateLimit, ah(async (req, res) => {
   const body = registerSchema.parse(req.body);
   const user = await registerUser(body);
   res.status(201).json({ user, message: "conta criada, aguardando aprovação" });

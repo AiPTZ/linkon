@@ -12,6 +12,8 @@ import { inboxRouter } from "./inbox.routes";
 import { webhooksRouter } from "./webhooks.routes";
 import { adminRouter } from "./admin.routes";
 import { requireAuth } from "../middleware/auth";
+import { rateLimit } from "../middleware/rateLimit";
+import { env } from "../config/env";
 
 export const apiRouter = Router();
 
@@ -20,6 +22,7 @@ apiRouter.use("/webhooks", webhooksRouter);
 apiRouter.use("/auth", authRouter);
 
 apiRouter.use(requireAuth);
+apiRouter.use(rateLimit({ windowMs: 60_000, max: env.RATE_LIMIT_API_MAX }));
 apiRouter.use("/config", configRouter);
 apiRouter.use("/accounts", accountsRouter);
 apiRouter.use("/agents", agentsRouter);

@@ -15,7 +15,9 @@ extrai dados de perfis com exportação para planilha.
 - Fluxos de mensagens visuais (editor de fluxo com blocos) e **chatbot por regras** com resposta automática.
 - Extração de dados de perfis (emails, telefones, links) com exportação `.xlsx`.
 - Painel de administração: saúde do sistema, filas, contas, usuários (aprovar/bloquear/redefinir senha).
-- Rate limit no login e webhooks assinados por segredo compartilhado.
+- Agente de IA por conta (limites, delay, transferência) com bot ligável/desligável por campanha.
+- Rate limits por IP real, CORS restrito, headers de segurança e webhooks assinados com comparação
+  timing-safe.
 
 ## Stack
 
@@ -107,10 +109,17 @@ na aba **Administração → Usuários** (nasce `ACTIVE`).
   SQLite local, o `dump.rdb` do Redis, `*.zip`, build artifacts e o diretório de planos locais.
 - Os `.env.example` contêm apenas placeholders. Gere valores fortes para `AUTH_SECRET`,
   `CREDENTIALS_ENCRYPTION_KEY` e `UNIPILE_WEBHOOK_SECRET` (mínimos validados: 16, 16 e 8 caracteres).
-- `POST /api/auth/login` tem rate limit por IP (10 tentativas por minuto; responde `429` com `Retry-After`).
-- Webhooks da Unipile são validados por segredo compartilhado (`UNIPILE_WEBHOOK_SECRET` no header
-  `unipile-auth` ou `authorization`).
+- **Rate limits por IP real** (atrás de proxy/Cloudflare, via `TRUST_PROXY` + `CF-Connecting-IP`):
+  login (10/min), registro (5/15min), API autenticada (600/min) e webhooks (600/min) — configuráveis
+  por `RATE_LIMIT_*` no `.env`; respondem `429` com `Retry-After`.
+- **CORS** restrito a `CORS_ORIGINS` em `NODE_ENV=production` (em dev reflete a origem).
+- **Headers de segurança** (`X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+  `Permissions-Policy`, HSTS atrás de HTTPS).
+- Webhooks da Unipile são validados por segredo compartilhado (`UNIPILE_WEBHOOK_SECRET` nos headers
+  `unipile-auth` ou `authorization`) com comparação **timing-safe**.
 - Credenciais de contas são criptografadas em repouso (AES-256-GCM).
+
+> Detalhes de deploy, Cloudflare e operação: [docs/HANDOFF.md](./docs/HANDOFF.md).
 
 ## Aviso
 
