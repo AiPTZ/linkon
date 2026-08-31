@@ -1,102 +1,152 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Inbox, MessageCircle, Send, Bot, UserCheck, CalendarDays } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { ConversationMessage, InboxListResponse } from "../types";
-import { formatDateTime, shortName } from "../lib/format";
-import { Spinner, PageLoader } from "../components/Spinner";
+import type { ConversationMessage, ConversationSummary, InboxListResponse, MessagePage, SuggestReplyResponse } from "../types";
+import { PageLoader } from "../components/Spinner";
 import { useToast, toastFromError } from "../components/Toast";
-
-const CONVERSATION_LABEL: Record<string, string> = {
-  BOT: "Bot",
-  NEEDS_HUMAN: "Precisa humano",
-  HUMAN: "Humano",
-  CLOSED: "Fechada",
-};
+import { InboxList, type InboxFilter } from "../components/inbox/InboxList";
+import { InboxChat } from "../components/inbox/InboxChat";
+import { LeadContextPanel } from "../components/inbox/LeadContextPanel";
 
 const REFRESH_MS = 8_000;
-
-type InboxFilter = "ALL" | "DISPARO" | "CONVITE";
-
-const FILTER_TABS: { key: InboxFilter; label: string }[] = [
-  { key: "ALL", label: "Todas" },
-  { key: "DISPARO", label: "Disparos" },
-  { key: "CONVITE", label: "Convites" },
-];
-
-function roleColor(role: ConversationMessage["role"]): string {
-  switch (role) {
-    case "LEAD":
-      return "bg-ink-700 text-cream";
-    case "BOT":
-      return "bg-gold-500/15 text-gold-300";
-    case "HUMAN":
-      return "bg-emerald-500/15 text-emerald-300";
-    case "SYSTEM":
-      return "bg-amber-500/15 text-amber-300";
-    default:
-      return "bg-ink-700 text-cream";
-  }
-}
-
-const ROLE_LABEL: Record<ConversationMessage["role"], string> = {
-  LEAD: "Lead",
-  BOT: "Bot",
-  HUMAN: "Você",
-  SYSTEM: "Sistema",
-};
+const PAGE_SIZE = 50;
 
 export function InboxPage() {
   const { toast } = useToast();
   const [inbox, setInbox] = useState<InboxListResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[] | null>(null);
-  const [draft, setDraft] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
   const [reactivating, setReactivating] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestCostUsd, setSuggestCostUsd] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<InboxFilter>("ALL");
 
-  const loadInbox = useCallback(() => {
-    api
-      .get<InboxListResponse>("/inbox")
-      .then(setInbox)
-      .catch(() => {});
-  }, []);
-
-  const loadMessages = useCallback((conversationId: string) => {
-    api
-      .get<{ items: ConversationMessage[] }>(`/inbox/${conversationId}/messages`)
-      .then((r) => setMessages(r.items))
-      .catch((e) => toastFromError(toast, e));
-  }, [toast]);
+  const inboxRef = useRef<InboxListResponse | null>(null);
+  const loadingMoreRef = useRef(false);
+  const nextCursorRef = useRef<string | null>(null);
 
   useEffect(() => {
-    loadInbox();
-    const t = setInterval(loadInbox, REFRESH_MS);
+    inboxRef.current = inbox;
+  }, [inbox]);
+
+  useEffect(() => {
+    nextCursorRef.current = nextCursor;
+  }, [nextCursor]);
+
+  const fetchInbox = useCallback((offset: number, limit: number, replace: boolean) => {
+    return api
+      .get<InboxListResponse>(`/inbox?offset=${offset}&limit=${limit}`)
+      .then((r) => {
+        setInbox((prev) => {
+          if (!prev || replace) return r;
+          const seen = new Set(prev.items.map((i) => i.id));
+          return { ...r, items: [...prev.items, ...r.items.filter((i) => !seen.has(i.id))] };
+        });
+      });
+  }, []);
+
+  const refreshInbox = useCallback(() => {
+    const current = inboxRef.current;
+    const limit = Math.max(current?.items.length ?? 0, PAGE_SIZE);
+    fetchInbox(0, limit, true).catch(() => {});
+  }, [fetchInbox]);
+
+  const loadMore = useCallback(() => {
+    const current = inboxRef.current;
+    if (!current?.hasMore || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    fetchInbox(current.items.length, PAGE_SIZE, false)
+      .catch(() => {})
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  }, [fetchInbox]);
+
+  const loadMessages = useCallback(
+    (conversationId: string) => {
+      api
+        .get<MessagePage>(`/inbox/${conversationId}/messages?limit=${PAGE_SIZE}`)
+        .then((r) => {
+          setMessages(r.items);
+          setNextCursor(r.nextCursor);
+        })
+        .catch((e) => toastFromError(toast, e));
+    },
+    [toast],
+  );
+
+  const loadOlder = useCallback(() => {
+    const cursor = nextCursorRef.current;
+    if (!selectedId || !cursor || loadingOlder) return;
+    setLoadingOlder(true);
+    api
+      .get<MessagePage>(`/inbox/${selectedId}/messages?cursor=${cursor}&limit=${PAGE_SIZE}`)
+      .then((r) => {
+        setMessages((prev) => [...r.items, ...(prev ?? [])]);
+        setNextCursor(r.nextCursor);
+      })
+      .catch((e) => toastFromError(toast, e))
+      .finally(() => setLoadingOlder(false));
+  }, [selectedId, loadingOlder, toast]);
+
+  useEffect(() => {
+    refreshInbox();
+    const t = setInterval(() => {
+      if (nextCursorRef.current === null) refreshInbox();
+    }, REFRESH_MS);
     return () => clearInterval(t);
-  }, [loadInbox]);
+  }, [refreshInbox]);
 
   useEffect(() => {
     if (!selectedId) return;
     setMessages(null);
+    setNextCursor(null);
+    setSuggestion(null);
+    setSuggestCostUsd(null);
     loadMessages(selectedId);
-    const t = setInterval(() => loadMessages(selectedId), REFRESH_MS);
+    const t = setInterval(() => {
+      if (nextCursorRef.current === null) loadMessages(selectedId);
+    }, REFRESH_MS);
     return () => clearInterval(t);
   }, [selectedId, loadMessages]);
 
+  useEffect(() => {
+    const pending = inbox?.needsHuman ?? 0;
+    const unread = inbox?.items.reduce((s, i) => s + (i.unread ?? 0), 0) ?? 0;
+    const total = pending + unread;
+    document.title = total > 0 ? `(${total}) Link ON - Automação LinkedIn` : "Link ON - Automação LinkedIn";
+    return () => {
+      document.title = "Link ON - Automação LinkedIn";
+    };
+  }, [inbox]);
+
+  if (inbox === null) return <PageLoader />;
+
+  const selected = inbox.items.find((c) => c.id === selectedId) ?? null;
+
   function selectConversation(id: string) {
     setSelectedId(id);
+    api.post(`/inbox/${id}/read`).catch(() => {});
+    setInbox((prev) =>
+      prev ? { ...prev, items: prev.items.map((i) => (i.id === id ? { ...i, unread: 0 } : i)) } : prev,
+    );
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!selectedId || !draft.trim()) return;
+  async function onSend(text: string) {
+    if (!selectedId) return;
     setSending(true);
     try {
-      await api.post(`/inbox/${selectedId}/messages`, { text: draft.trim() });
-      setDraft("");
+      await api.post(`/inbox/${selectedId}/messages`, { text });
       loadMessages(selectedId);
-      loadInbox();
+      refreshInbox();
     } catch (err) {
       toastFromError(toast, err);
     } finally {
@@ -111,7 +161,7 @@ export function InboxPage() {
       await api.post(`/inbox/${selectedId}/claim`);
       toast("success", "Conversa assumida por você.");
       loadMessages(selectedId);
-      loadInbox();
+      refreshInbox();
     } catch (err) {
       toastFromError(toast, err);
     } finally {
@@ -126,7 +176,7 @@ export function InboxPage() {
       await api.post(`/inbox/${selectedId}/reactivate`);
       toast("success", "IA reativada nesta conversa.");
       loadMessages(selectedId);
-      loadInbox();
+      refreshInbox();
     } catch (err) {
       toastFromError(toast, err);
     } finally {
@@ -134,15 +184,63 @@ export function InboxPage() {
     }
   }
 
-  if (inbox === null) return <PageLoader />;
+  async function onSuggest() {
+    if (!selectedId || suggesting) return;
+    setSuggesting(true);
+    setSuggestCostUsd(null);
+    try {
+      const r = await api.post<SuggestReplyResponse>(`/inbox/${selectedId}/suggest-reply`);
+      setSuggestion(r.reply);
+      setSuggestCostUsd(r.costUsd);
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
-  const selected = inbox.items.find((c) => c.id === selectedId) ?? null;
+  function onDiscardSuggestion() {
+    setSuggestion(null);
+    setSuggestCostUsd(null);
+  }
 
-  const items = inbox.items.filter((c) => {
-    if (filter === "ALL") return true;
-    const isDisparo = c.campaign ? c.campaign.mode === "DISPARO" : false;
-    return filter === "DISPARO" ? isDisparo : !isDisparo;
-  });
+  async function onSaveNote(note: string) {
+    if (!selectedId) return;
+    setSavingNote(true);
+    try {
+      const updated = await api.patch<ConversationSummary>(`/inbox/${selectedId}`, { note });
+      setInbox((prev) =>
+        prev ? { ...prev, items: prev.items.map((i) => (i.id === selectedId ? updated : i)) } : prev,
+      );
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function onToggleResolved() {
+    if (!selectedId) return;
+    const current = inbox?.items.find((i) => i.id === selectedId) ?? null;
+    if (!current) return;
+    setSavingNote(true);
+    try {
+      const updated = await api.patch<ConversationSummary>(`/inbox/${selectedId}`, { resolved: !current.resolved });
+      setInbox((prev) =>
+        prev ? { ...prev, items: prev.items.map((i) => (i.id === selectedId ? updated : i)) } : prev,
+      );
+    } catch (err) {
+      toastFromError(toast, err);
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  function onOpenProfile() {
+    if (selected?.lead?.profileUrl) {
+      window.open(selected.lead.profileUrl, "_blank", "noopener,noreferrer");
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -150,159 +248,52 @@ export function InboxPage() {
         <h1 className="font-serif text-3xl font-semibold gold-gradient-text">Inbox</h1>
         <p className="mt-1 text-sm text-cream/50">
           Conversas transferidas pelo bot e atendimento humano.{" "}
-          {inbox.needsHuman > 0 && (
-            <span className="text-gold-400">{inbox.needsHuman} aguardando atendimento.</span>
-          )}
+          {inbox.needsHuman > 0 && <span className="text-gold-400">{inbox.needsHuman} aguardando atendimento.</span>}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {FILTER_TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                filter === t.key
-                  ? "border-gold-500 bg-gold-500/15 text-gold-400"
-                  : "border-ink-400 bg-ink-800 text-cream/50 hover:text-cream/80"
-              }`}
-              onClick={() => setFilter(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-        <div className="card max-h-[70vh] overflow-y-auto p-3">
-          {items.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-10 text-center text-cream/40">
-              <Inbox className="h-8 w-8" />
-              <span className="text-sm">Nenhuma conversa ainda.</span>
-            </div>
-          )}
-          {items.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => selectConversation(c.id)}
-              className={`mb-1 flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-all ${selectedId === c.id ? "border-gold-500/50 bg-gold-500/10" : "border-transparent hover:bg-ink-800"}`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-cream">
-                    {shortName(c.lead?.name, "Lead")}
-                  </span>
-                  <span className="whitespace-nowrap text-[11px] text-cream/30">
-                    {formatDateTime(c.lastMessageAt)}
-                  </span>
-                </div>
-                <div className="truncate text-xs text-cream/45">{c.lead?.headline || (c.campaign ? c.campaign.name : `Agente nativo · ${c.account.username ?? "minha conta"}`)}</div>
-                <div className="mt-1 truncate text-xs text-cream/60">{c.lastMessage}</div>
-                {c.booking && (
-                  <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-gold-500/40 bg-gold-500/10 px-2 py-0.5 text-xs text-gold-400">
-                    <CalendarDays className="h-3 w-3" />
-                    Reunião: {formatDateTime(c.booking.startTime)}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    c.campaign && c.campaign.mode === "DISPARO"
-                      ? "bg-sky-500/15 text-sky-400"
-                      : c.campaign
-                        ? "bg-ink-500 text-cream/50"
-                        : "bg-emerald-500/15 text-emerald-400"
-                  }`}
-                >
-                  {c.campaign ? (c.campaign.mode === "DISPARO" ? "Disparo" : "Convite") : "Agente"}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.status === "NEEDS_HUMAN" ? "bg-amber-500/15 text-amber-400" : "bg-ink-500 text-cream/50"}`}
-                >
-                  {CONVERSATION_LABEL[c.status] ?? c.status}
-                  {c.unread > 0 && ` · ${c.unread}`}
-                </span>
-              </div>
-            </button>
-          ))}
+      <div className="grid gap-4 lg:grid-cols-[340px_1fr_300px]">
+        <div className="card max-h-[70vh] p-3">
+          <InboxList
+            items={inbox.items}
+            selectedId={selectedId}
+            onSelect={selectConversation}
+            filter={filter}
+            onFilterChange={setFilter}
+            needsHuman={inbox.needsHuman}
+            hasMore={inbox.hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={loadMore}
+          />
         </div>
 
-        <div className="card flex max-h-[70vh] flex-col overflow-hidden">
-          {!selected ? (
-            <div className="flex flex-1 items-center justify-center text-cream/30">
-              <MessageCircle className="mr-2 h-5 w-5" /> Selecione uma conversa
-            </div>
-          ) : (
-            <>
-              <div className="border-b border-ink-400 px-4 py-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-medium text-cream">{shortName(selected.lead?.name, "Lead")}</div>
-                    <div className="truncate text-xs text-cream/45">
-                      {selected.lead?.headline || (selected.campaign ? selected.campaign.name : `Agente nativo · ${selected.account.username ?? "minha conta"}`)}
-                    </div>
-                  </div>
-                  {selected.status === "BOT" ? (
-                    <button
-                      type="button"
-                      onClick={onClaim}
-                      disabled={claiming}
-                      className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-60"
-                    >
-                      {claiming ? <Spinner className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                      Assumir
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={onReactivate}
-                      disabled={reactivating}
-                      className="flex items-center gap-1.5 rounded-full border border-gold-500/40 bg-gold-500/10 px-3 py-1 text-xs font-medium text-gold-300 transition-colors hover:bg-gold-500/20 disabled:opacity-60"
-                    >
-                      {reactivating ? <Spinner className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
-                      Reativar IA
-                    </button>
-                  )}
-                </div>
-              </div>
+        <InboxChat
+          conversation={selected}
+          messages={messages}
+          hasOlder={nextCursor !== null}
+          loadingOlder={loadingOlder}
+          onLoadOlder={loadOlder}
+          sending={sending}
+          onSend={onSend}
+          claiming={claiming}
+          reactivating={reactivating}
+          onClaim={onClaim}
+          onReactivate={onReactivate}
+          suggesting={suggesting}
+          suggestion={suggestion}
+          suggestCostUsd={suggestCostUsd}
+          onSuggest={onSuggest}
+          onDiscardSuggestion={onDiscardSuggestion}
+          onOpenProfile={onOpenProfile}
+        />
 
-              <div className="flex-1 space-y-2 overflow-y-auto p-4">
-                {messages === null ? (
-                  <div className="flex justify-center py-8">
-                    <Spinner className="h-6 w-6" />
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-cream/40">Sem mensagens.</div>
-                ) : (
-                  messages.map((m) => (
-                    <div key={m.id} className={`flex ${m.role === "LEAD" ? "justify-start" : "justify-end"}`}>
-                      <div className={`max-w-[75%] rounded-2xl px-3 py-2 ${roleColor(m.role)}`}>
-                        <div className="mb-0.5 text-[10px] text-cream/40">{ROLE_LABEL[m.role]}</div>
-                        <div className="whitespace-pre-wrap break-words text-sm text-cream">{m.content}</div>
-                        {m.costUsd != null && m.role === "BOT" && (
-                          <div className="mt-1 text-[10px] text-cream/30">custo ~US$ {m.costUsd.toFixed(5)}</div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <form onSubmit={onSubmit} className="flex items-center gap-2 border-t border-ink-400 p-3">
-                <input
-                  className="input flex-1"
-                  placeholder="Responder como você (sai pelo LinkedIn do cliente)..."
-                  value={draft}
-                  maxLength={3000}
-                  onChange={(e) => setDraft(e.target.value)}
-                />
-                <button type="submit" className="btn btn-primary" disabled={sending || !draft.trim()}>
-                  {sending ? <Spinner className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                </button>
-              </form>
-            </>
-          )}
+        <div className="max-h-[70vh] overflow-y-auto">
+          <LeadContextPanel
+            conversation={selected}
+            savingNote={savingNote}
+            onSaveNote={onSaveNote}
+            onToggleResolved={onToggleResolved}
+          />
         </div>
       </div>
     </div>
