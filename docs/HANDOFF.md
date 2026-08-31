@@ -32,6 +32,10 @@ dados de perfis com exportação para `.xlsx`.
   Convivência com o agente por conta: o gate por campanha só vale para leads daquela campanha;
   conversas nativas continuam regidas pelo agente da conta.
 - Inbox unificado com status humano/bot, reativação de conversa, mensagens e eventos.
+- **Agendamento automático** ("Agente nativo"): a IA oferece horários ao lead, coleta o e-mail e cria
+  reunião no Google Agenda (com Google Meet), persistindo o `Booking` e mostrando um chip de reunião
+  confirmada no Inbox. Configuração em **Configurações → Google Agenda** (conectar conta + janelas) e
+  no bloco **Agendamento de reuniões** do agente nativo.
 - Multi-usuário com papéis USER/ADMIN, escopo por usuário, aprovação de cadastro e painel admin.
 - Rate limits por IP real (login, registro, API autenticada e webhooks) e proteções para rodar atrás
   de Cloudflare (ver seção 5).
@@ -46,6 +50,8 @@ dados de perfis com exportação para `.xlsx`.
 
 - Node 20+, Redis (`redis-server`)
 - Conta Unipile (DSN + Access Token) e, para o bot IA, uma `USER_LLM_API_KEY`
+- Para o agendamento: app Google OAuth com `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e
+  `GOOGLE_REDIRECT_URI` (a rota pública `/api/calendar/oauth/callback`)
 
 ### Passos
 
@@ -251,6 +257,20 @@ OpenAI-compatível). Vazio → bot em modo RULES. **Nunca** commite a chave real
 A base de preview contém contas LinkedIn conectadas (status OK/DISCONNECTED) e campanhas reais. Não
 deletar contas que o cliente ainda usa. Usuários criados em testes de rate limit (ex.: `limiteuser*`)
 podem ser bloqueados/removidos pelo admin.
+
+### 7.10. Agendamento depende de calendário CONNECTED + janelas cadastradas
+
+O fluxo de agendamento só oferece reuniões se: o agente tiver `schedulingEnabled`, o
+`CalendarConnection` estiver `CONNECTED` e existirem janelas de disponibilidade cadastradas
+(Configurações → Google Agenda). Sem janelas ou com calendário desconectado, `startBooking` transfere
+a conversa ao humano. Conversas presas em `OFFERING`/`AWAITING_EMAIL`/`CONFIRMING` por mais de 24h são
+resetadas pelo `expireStaleScheduling` do scheduler (cron de 5/15 min).
+
+### 7.11. Google sem lib: `fetch` nativo e refresh token criptografado
+
+O `calendar.service` usa `fetch` (sem dependência Google) e guarda o refresh token criptografado
+(AES-256-GCM) no `CalendarConnection`. `createEventRobust` refaz o request após `401` (refresh) e faz
+backoff em `429`/`5xx`. Testes mockam o fetch globalmente (`vi.stubGlobal`).
 
 ---
 

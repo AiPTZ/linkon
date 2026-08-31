@@ -45,7 +45,7 @@ Estrutura em `backend/src/`:
 | `lib/` | `prisma.ts`, `redis.ts` — clientes |
 | `middleware/` | `auth.ts` (requireAuth/requireAdmin), `rateLimit.ts` (login) |
 | `routes/` | Controllers da API (ver [API.md](./API.md)) |
-| `services/` | Lógica de negócio (user, auth, campaign, invite, chatbot, flow, sweep, broadcast, search, contacts, extraction, config, queue, log, notification, unipile) |
+| `services/` | Lógica de negócio (user, auth, campaign, invite, chatbot, flow, sweep, broadcast, search, contacts, extraction, config, queue, log, notification, unipile, calendar, scheduling) |
 | `workers/` | Processos BullMQ |
 | `scheduler.ts` | Cron de 5 minutos que processa campanhas RUNNING |
 | `utils/` | `time`, `crypto`, `errors`, `logger`, `scope` |
@@ -65,6 +65,15 @@ Estrutura em `backend/src/`:
 - `LogEvent` — log com `type`, `level`, `message`, `payload`, vínculos opcionais.
 - `Notification` — notificação com `read`.
 - `WebhookRegistration` — registro de webhooks da Unipile.
+- `CalendarConnection` — conexão Google Agenda do usuário (`userId` único); `refreshToken`
+  (criptografado), `googleEmail`, `status` (`CONNECTED`/`DISCONNECTED`), `disconnectedAt`.
+- `SellerAvailability` — janelas de disponibilidade do vendedor (`userId` único), `windows` em JSON.
+- `Booking` — reunião agendada (`startTime`, `endTime`, `title`, `meetLink`, `googleEventId`,
+  `status` `CONFIRMING`/`CONFIRMED`/`CANCELLED`); `@@unique([userId, startTime, endTime])` evita
+  duplicidade; vínculos com `User`, `Account` e `Conversation`.
+- `NativeAgent` (extra) — campos `schedulingEnabled`, `meetingDurationMin`, `meetingTitle`.
+- `Conversation` (extra) — `scheduleState` (máquina de agendamento) e `scheduleData` (JSON com o
+  contexto da oferta: slots, rodada, e-mail), relação `bookings`.
 
 ### Filas e workers (BullMQ)
 
@@ -89,6 +98,30 @@ Filas em `services/queue.service.ts`, consumidas por processos separados (`worke
   ou `processInviteCampaign` (SEARCH), enfileirando os jobs correspondentes.
 
 O scheduler roda dentro do processo da API (`startScheduler` em `index.ts`).
+
+Além do cron de campanhas, o scheduler roda `expireStaleScheduling()` a cada 5 minutos (junto das
+campanhas) e também em um cron dedicado a cada 15 minutos: conversas presas em `OFFERING` /
+`AWAITING_EMAIL` / `CONFIRMING` com `updatedAt` há mais de 24h são resetadas para `NONE` (timeout
+de segurança da máquina de agendamento).
+
+### Agendamento automático (scheduling)
+
+Fluxo: **webhook → `chatbot-ai.service` → `scheduling.service` → `calendar.service` → Google**.
+
+1. No `handleIncomingMessage`, após o check de conversa travada (humano), conversas em estado de
+   agendamento ativo roteiam para `advanceScheduling`; se a decisão do LLM for `intent: "schedule"`
+   e o agente tiver `schedulingEnabled`, inicia `startBooking`.
+2. `scheduling.service` mantém a máquina de estados por conversa (persistida em
+   `Conversation.scheduleState`/`scheduleData`):
+   `NONE → OFFERING → AWAITING_EMAIL → CONFIRMING → BOOKED` (com `FAILED` como terminal). Cada
+   transição gera uma mensagem ao lead via `recordMessage`.
+3. A oferta usa `generateSlots` (janelas do `SellerAvailability`, fuso `APP_TIMEZONE`, descontando
+   `Booking` CONFIRMED/CONFIRMING já existentes); a extração de intenção/e-mail usa
+   `generateExtraction`; a confirmação usa `generateConfirmationMessage` (todas em `ai.service`).
+4. `completeBooking` chama `createEventRobust` (Google Calendar com Meet via fetch nativo, sem lib
+   Google). Desconectado → transfere ao humano; falha retryável exaurida → cancela e reoferece.
+5. O `Booking` é persistido (status `CONFIRMING` → `CONFIRMED` com `googleEventId`/`meetLink`), o
+   evento aparece no Google Agenda e a conversa volta a `NONE`.
 
 ### Autenticação e escopo
 
@@ -143,5 +176,6 @@ O frontend não conhece segredos; usa apenas `VITE_WHATSAPP_SUPPORT` (link de su
 3. **DISPARO** — usuário seleciona leads (`POST /api/campaigns/:id/leads/select`) → scheduler dispara
    mensagem ou fluxo para os selecionados.
 4. **Chatbot** — webhook `message_received` → marca lead `RESPONDED`, avança fluxo e (se habilitado)
-   enfileira resposta no `linkon-chatbot`.
+   enfileira resposta no `linkon-chatbot`. Com agendamento habilitado, conversas em estado ativo
+   roteiam para a máquina de agendamento (ver seção acima).
 5. **Extração** — `POST /api/extractions` → `extraction.worker` roda busca + scrape → export `.xlsx`.

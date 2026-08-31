@@ -47,6 +47,12 @@ Este documento descreve o estado atual da implementação no repositório.
 - **Scheduler**: `node-cron` a cada 5 minutos processando campanhas `RUNNING` (limites, janela de
   horário, fluxos, enfileiramento).
 - **Notificações e logs**: `notification.service.ts`, `log.service.ts`.
+- **Agendamento automático**: `calendar.service.ts` (OAuth + Google Calendar/Meet via `fetch` nativo,
+  sem lib Google), `scheduling.service.ts` (helpers puros + máquina de estados
+  `NONE → OFFERING → AWAITING_EMAIL → CONFIRMING → BOOKED`), rotas `/api/calendar/*` com callback
+  OAuth público, campos de agendamento no `NativeAgent`, timeout de 24h no scheduler
+  (`expireStaleScheduling`) e UI (bloco "Agendamento de reuniões", card Google Agenda + janelas,
+  chip de reunião no Inbox).
 
 ### Frontend
 
@@ -58,8 +64,11 @@ Este documento descreve o estado atual da implementação no repositório.
 
 ## Testes
 
-- Suíte Vitest no backend (14 arquivos de teste, **124 testes**), cobrindo: user/auth, rate limit,
-  scheduler, flows, chatbot, search, contacts, sweep, campaign, notification, broadcast, time e scope.
+- Suíte Vitest no backend (**24 arquivos de teste, 225 testes**), cobrindo: user/auth, rate limit,
+  scheduler (incl. `expireStaleScheduling`), flows, chatbot, search, contacts, sweep, campaign,
+  notification, broadcast, time, scope, `calendar.service` (OAuth/evento/retry com fetch mockado),
+  `scheduling.service` (janelas, slots com fuso, e-mail, match, máquina de estados) e
+  `calendar.routes` (status, oauth/url, availability, disconnect, bookings, callback).
 - Rodar: `npm test -w @linkon/backend`.
 - Typecheck de backend e frontend passando (`npm run typecheck`).
 - Build de backend e frontend passando (`npm run build`).
@@ -73,6 +82,9 @@ Este documento descreve o estado atual da implementação no repositório.
 - **Webhooks respondem `200` imediatamente** e processam em segundo plano (evita retry desnecessário).
 - **Registros globais** (`userId: null`) como base do admin; `X-Operate-As` permite operar por usuário.
 - **Usuário criado pelo admin nasce `ACTIVE`**; usuário auto-cadastrado nasce `PENDING` (aprovação).
+- **Google Agenda via `fetch` nativo** (sem dependência Google): `calendar.service.ts` faz OAuth
+  (`access_type=offline` + `prompt=consent`) e cria eventos com Meet; refresh token criptografado em
+  repouso; `createEventRobust` trata `401` (refresh + retry), `429`/`5xx` (backoff) e desconexão.
 
 ## Segurança
 
@@ -92,6 +104,9 @@ Este documento descreve o estado atual da implementação no repositório.
 - Campanhas dependem do Redis estar no ar; sem Redis, filas não funcionam (o health reporta `redis: false`).
 - O preview de relações (`/accounts/:id/relations`) é limitado a 10.000 resultados por chamada.
 - `syncAccounts` silenciosamente ignora falhas da Unipile (retorna contas locais).
+- O agendamento só funciona com `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` configurados e o
+  `CalendarConnection` do usuário `CONNECTED`; sem isso, conversas com intenção de agendar são
+  transferidas ao humano.
 
 ## Fora de escopo deste repositório
 

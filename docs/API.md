@@ -86,6 +86,20 @@ Convenções:
 | POST | `/admin/users/:id/reset-password` | Redefine senha de usuário |
 | GET | `/admin/global` | Contagem de campanhas/extrações globais |
 
+### Calendar (Agendamento)
+
+| Método | Rota | Descrição | Auth |
+| --- | --- | --- | --- |
+| GET | `/calendar/status` | Status da conexão Google Agenda | JWT |
+| GET | `/calendar/oauth/url` | URL de conexão OAuth (state JWT 10 min) | JWT |
+| GET | `/calendar/oauth/callback` | Callback OAuth → redirect `?calendar=connected\|error` | Público |
+| POST | `/calendar/disconnect` | Desconecta (limpa refresh token) | JWT |
+| GET | `/calendar/availability` | Janelas de disponibilidade | JWT |
+| PUT | `/calendar/availability` | Substitui janelas (valida overlap) | JWT |
+| GET | `/calendar/bookings` | Bookings CONFIRMED do vendedor | JWT |
+
+`PUT /api/agents/:accountId` agora aceita `schedulingEnabled`, `meetingDurationMin`, `meetingTitle`.
+
 ## Detalhes
 
 ### GET /health
