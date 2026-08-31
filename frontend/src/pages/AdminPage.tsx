@@ -77,7 +77,7 @@ export function AdminPage() {
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   const [users, setUsers] = useState<AdminUser[] | null>(null);
-  const [globalData, setGlobalData] = useState<{ campaigns: number; extractions: number } | null>(null);
+  const [globalData, setGlobalData] = useState<{ campaigns: number; contacts: number } | null>(null);
 
   const [showNewUser, setShowNewUser] = useState(false);
   const [newName, setNewName] = useState("");
@@ -113,7 +113,7 @@ export function AdminPage() {
 
   const loadGlobal = useCallback(() => {
     api
-      .get<{ campaigns: number; extractions: number }>("/admin/global")
+      .get<{ campaigns: number; contacts: number }>("/admin/global")
       .then(setGlobalData)
       .catch((e) => toastFromError(toast, e));
   }, [toast]);
@@ -579,7 +579,7 @@ export function AdminPage() {
             <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <StatCard label="Campanhas globais" value={globalData.campaigns} accent />
-                <StatCard label="Extrações globais" value={globalData.extractions} />
+                <StatCard label="Contatos globais" value={globalData.contacts} />
               </div>
               <div className="card flex items-start gap-3 px-5 py-4">
                 <Globe className="mt-0.5 h-5 w-5 shrink-0 text-gold-500" />
@@ -587,7 +587,7 @@ export function AdminPage() {
                   <p className="font-medium text-cream">Base global (somente leitura)</p>
                   <p className="mt-1 text-sm text-cream/50">
                     A base global reúne os dados do administrador (dono NULL), visíveis apenas no painel de
-                    administração. Campanhas e extrações globais são somente leitura e não podem ser alteradas por
+                    administração. Campanhas e contatos globais são somente leitura e não podem ser alterados por
                     aqui.
                   </p>
                 </div>
