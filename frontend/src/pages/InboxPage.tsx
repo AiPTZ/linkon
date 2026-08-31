@@ -99,9 +99,7 @@ export function InboxPage() {
 
   useEffect(() => {
     refreshInbox();
-    const t = setInterval(() => {
-      if (nextCursorRef.current === null) refreshInbox();
-    }, REFRESH_MS);
+    const t = setInterval(refreshInbox, REFRESH_MS);
     return () => clearInterval(t);
   }, [refreshInbox]);
 

@@ -101,13 +101,13 @@ describe("reactivateConversation", () => {
 });
 
 describe("markConversationRead", () => {
-  it("marca a conversa como lida atualizando updatedAt", async () => {
+  it("marca a conversa como lida setando readAt", async () => {
     (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CV1", accountId: "A1", unipileChatId: "CHAT1" });
     const res = await markConversationRead("CV1", "U1");
     expect(res.ok).toBe(true);
     const upd = (prisma.conversation.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(upd.where.id).toBe("CV1");
-    expect(upd.data.updatedAt).toBeInstanceOf(Date);
+    expect(upd.data.readAt).toBeInstanceOf(Date);
   });
 
   it("lança 404 quando a conversa não é do usuário", async () => {
@@ -151,7 +151,7 @@ describe("listInbox paginação", () => {
       campaign: { id: "C1", name: "Tech", mode: "DISPARO" },
       account: { username: "acme" },
       bookings: [],
-      updatedAt: new Date(),
+      readAt: null,
     };
     (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([row]);
     (prisma.conversation.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(1).mockResolvedValueOnce(5);
@@ -167,7 +167,7 @@ describe("listInbox paginação", () => {
 
   it("retorna hasMore false quando offset+items >= total", async () => {
     (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "CV1", status: "BOT", note: "", resolved: false, lastMessageAt: new Date(), lead: { name: null, headline: null, profileUrl: null }, campaign: null, account: { username: null }, bookings: [], updatedAt: new Date() },
+      { id: "CV1", status: "BOT", note: "", resolved: false, lastMessageAt: new Date(), lead: { name: null, headline: null, profileUrl: null }, campaign: null, account: { username: null }, bookings: [], readAt: null },
     ]);
     (prisma.conversation.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
     (prisma.conversationMessage.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ content: "oi", role: "LEAD" });

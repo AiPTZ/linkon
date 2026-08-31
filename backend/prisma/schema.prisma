@@ -230,6 +230,7 @@ model Conversation {
   status        String                @default("BOT")
   note          String                @default("")
   resolved      Boolean               @default(false)
+  readAt        DateTime?
   lastMessageAt DateTime              @default(now())
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt

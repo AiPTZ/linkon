@@ -126,7 +126,7 @@ Fluxo: **webhook → `chatbot-ai.service` → `scheduling.service` → `calendar
 
 ### Inbox (atendimento humano)
 
-- Unread: mensagens LEAD com `createdAt > conversation.updatedAt`; `POST /read` seta `updatedAt` e zera o contador.
+- Unread: mensagens LEAD após `conversation.readAt` (`readAt` nulo = todas não lidas); `POST /read` seta `readAt` e zera o contador.
 - Paginação: lista por offset (ordena por status + lastMessageAt); mensagens por cursor (`id`), janela das mais recentes.
 - `note`/`resolved` persistidos em `Conversation` (PATCH `/inbox/:id`).
 - Resposta assistida: `generateHumanReply` (ai.service.ts) reusa a base de conhecimento do agente (NativeAgent) e devolve rascunho editável + custo estimado.

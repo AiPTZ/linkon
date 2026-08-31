@@ -60,7 +60,7 @@ async function itemFromRow(c: {
   status: string;
   note: string;
   resolved: boolean;
-  updatedAt: Date;
+  readAt: Date | null;
   lastMessageAt: Date;
   lead: { name: string | null; headline: string | null; profileUrl: string | null } | null;
   campaign: { id: string; name: string; mode: string } | null;
@@ -73,7 +73,11 @@ async function itemFromRow(c: {
     select: { content: true, role: true },
   });
   const unread = await prisma.conversationMessage.count({
-    where: { conversationId: c.id, role: "LEAD", createdAt: { gt: c.updatedAt } },
+    where: {
+      conversationId: c.id,
+      role: "LEAD",
+      ...(c.readAt ? { createdAt: { gt: c.readAt } } : {}),
+    },
   });
   return {
     id: c.id,
@@ -175,7 +179,7 @@ export async function markConversationRead(
   await assertAccess(conversationId, userId);
   await prisma.conversation.update({
     where: { id: conversationId },
-    data: { updatedAt: new Date() },
+    data: { readAt: new Date() },
   });
   return { ok: true };
 }

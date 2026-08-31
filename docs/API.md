@@ -342,7 +342,7 @@ Resposta `{ "ok": true }`.
 Query: `offset` (base 0, padrão 0), `limit` (1-100, padrão 50). Resposta:
 `{ "items", "needsHuman", "total", "hasMore" }`. Ordena por status + `lastMessageAt` desc.
 `items[]` incluem `id`, `status`, `note`, `resolved`, `lastMessageAt`, `lead`, `campaign`, `account`,
-`lastMessage`, `unread` (mensagens LEAD com `createdAt > updatedAt`) e `booking` (próximo CONFIRMED).
+`lastMessage`, `unread` (mensagens LEAD após `readAt`; `readAt` nulo = todas) e `booking` (próximo CONFIRMED).
 
 ### GET /api/inbox/:id/messages
 
@@ -351,7 +351,7 @@ ascendente (as mais recentes primeiro por cursor). `nextCursor` é `null` quando
 
 ### POST /api/inbox/:id/read
 
-Resposta `204` sem corpo. Seta `conversation.updatedAt` para agora (zera o `unread`).
+Resposta `204` sem corpo. Seta `conversation.readAt` para agora (zera o `unread`).
 
 ### PATCH /api/inbox/:id
 
