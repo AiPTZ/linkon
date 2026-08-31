@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { unipile, type UnipileAccount } from "./unipile.service";
 import { configService } from "./config.service";
 import { createLog } from "./log.service";
+import { contactsQueue } from "./queue.service";
 import { encrypt } from "../utils/crypto";
 import { env } from "../config/env";
 import { ApiError } from "../utils/errors";
@@ -110,16 +111,22 @@ export async function confirmHosted(
           where: { id: existing.id },
           data: { status, username: acc.name },
         });
+        if (status === "OK") {
+          await contactsQueue.add("sync-network", { accountId: existing.id });
+        }
         continue;
       }
       await assertCanConnectLinkedIn(userId);
     }
-    await prisma.account.upsert({
+    const local = await prisma.account.upsert({
       where: { unipileAccountId: acc.id },
       update: { status, username: acc.name, userId: userId ?? null },
       create: { unipileAccountId: acc.id, username: acc.name, status, authMethod: "HOSTED", userId: userId ?? null },
     });
     created += 1;
+    if (status === "OK") {
+      await contactsQueue.add("sync-network", { accountId: local.id });
+    }
   }
   return { accounts: created };
 }

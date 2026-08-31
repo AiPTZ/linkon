@@ -24,8 +24,11 @@ vi.mock("../utils/crypto", () => ({
 
 vi.mock("./log.service", () => ({ createLog: vi.fn() }));
 
+vi.mock("./queue.service", () => ({ contactsQueue: { add: vi.fn() } }));
+
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
+import { contactsQueue } from "./queue.service";
 import {
   disconnectAccount,
   confirmHosted,
@@ -45,6 +48,7 @@ const transaction = prisma.$transaction as ReturnType<typeof vi.fn>;
 const deleteAccount = unipile.deleteAccount as ReturnType<typeof vi.fn>;
 const listAccounts = unipile.listAccounts as ReturnType<typeof vi.fn>;
 const connectLinkedinNative = unipile.connectLinkedinNative as ReturnType<typeof vi.fn>;
+const queueAdd = contactsQueue.add as ReturnType<typeof vi.fn>;
 
 const account: Account = {
   id: "A1",
@@ -153,6 +157,17 @@ describe("confirmHosted", () => {
     const res = await confirmHosted("U1", { pending: true });
     expect(res.accounts).toBe(0);
     expect(accountUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("confirmHosted (sync de rede)", () => {
+  it("enfileira sync-network para conta OK", async () => {
+    listAccounts.mockResolvedValue({
+      items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }],
+    });
+    accountFind.mockResolvedValue(null);
+    await confirmHosted("U1", { pending: false });
+    expect(queueAdd).toHaveBeenCalledWith("sync-network", { accountId: expect.any(String) });
   });
 });
 

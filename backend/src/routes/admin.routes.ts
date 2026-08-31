@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { redisConnection } from "../lib/redis";
-import { invitesQueue, chatbotQueue, searchQueue } from "../services/queue.service";
+import { invitesQueue, chatbotQueue, searchQueue, contactsQueue } from "../services/queue.service";
 import { unipile } from "../services/unipile.service";
 import { createLog } from "../services/log.service";
 import {
@@ -220,6 +220,7 @@ adminRouter.post(
     if (!account) throw new ApiError(404, "Conta não encontrada");
     if (account.status !== "PENDING_LINKEDIN") throw new ApiError(400, "Conta não está aguardando aprovação");
     await prisma.account.update({ where: { id: account.id }, data: { status: "OK", checkpointType: null } });
+    await contactsQueue.add("sync-network", { accountId: account.id });
     await createLog({ type: "ACCOUNT_CONNECTED", message: `Conta ${account.username ?? account.unipileAccountId} aprovada pelo administrador`, accountId: account.id });
     res.json({ ok: true });
   }),
