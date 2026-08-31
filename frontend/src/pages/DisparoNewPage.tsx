@@ -11,7 +11,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Account, CampaignPayload, Flow } from "../types";
+import type { Account, CadenceStep, CampaignPayload, Flow } from "../types";
 import { FlowEditor } from "../components/FlowEditor";
 import { emptyFlow } from "../lib/flow";
 import { PageLoader } from "../components/Spinner";
@@ -42,6 +42,8 @@ export function DisparoNewPage() {
   const [flow, setFlow] = useState<Flow>(emptyFlow());
   const [flowOpen, setFlowOpen] = useState(false);
   const [agentEnabled, setAgentEnabled] = useState(true);
+  const [cadenceEnabled, setCadenceEnabled] = useState(false);
+  const [cadence, setCadence] = useState<CadenceStep[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const connected = useMemo(
@@ -63,13 +65,28 @@ export function DisparoNewPage() {
   const setStrategyField = <K extends keyof typeof strategy>(key: K, value: number) =>
     setStrategy((s) => ({ ...s, [key]: value }));
 
+  const updateCadenceBody = (i: number, body: string) =>
+    setCadence((c) => c.map((s, idx) => (idx === i ? { ...s, body } : s)));
+  const updateCadenceWait = (i: number, waitDays: number) =>
+    setCadence((c) => c.map((s, idx) => (idx === i ? { ...s, waitDays } : s)));
+  const addCadenceStep = () => {
+    if (cadence.length >= 5) return;
+    setCadence((c) => [...c, { body: "", waitDays: 3 }]);
+  };
+  const removeCadenceStep = (i: number) =>
+    setCadence((c) => (c.length > 1 ? c.filter((_, idx) => idx !== i) : c));
+
   async function onCreate() {
     if (!accountId) {
       toast("error", "Selecione uma conta LinkedIn");
       return;
     }
-    if (!message.trim() && !useFlow) {
+    if (!message.trim() && !useFlow && !cadenceEnabled) {
       toast("error", "Escreva a mensagem que será enviada");
+      return;
+    }
+    if (cadenceEnabled && cadence.some((s) => !s.body.trim() || s.waitDays < 1 || s.waitDays > 90)) {
+      toast("error", "Preencha todas as mensagens da cadência (1 a 90 dias de espera)");
       return;
     }
     setSubmitting(true);
@@ -84,6 +101,7 @@ export function DisparoNewPage() {
         mode: "DISPARO",
         accountId,
         inviteMessage: message,
+        cadence: cadenceEnabled ? cadence : undefined,
         dailyLimit: strategy.dailyLimit,
         weeklyLimit: strategy.weeklyLimit,
         minDelayMin: strategy.minDelayMin,
@@ -177,10 +195,88 @@ export function DisparoNewPage() {
             <p className="mt-1 text-right text-xs text-cream/40">{message.length}/300</p>
           </div>
           <p className="text-xs text-cream/40">
-            Dica: use <code className="rounded bg-ink-700 px-1 py-0.5 text-gold-400">{"{nome}"}</code> e{" "}
-            <code className="rounded bg-ink-700 px-1 py-0.5 text-gold-400">{"{cargo}"}</code> para
-            personalizar com o nome e o cargo de cada contato.
+            Dica: use <code className="rounded bg-ink-700 px-1 py-0.5 text-gold-400">{"{nome}"}</code>,{" "}
+            <code className="rounded bg-ink-700 px-1 py-0.5 text-gold-400">{"{cargo}"}</code> e{" "}
+            <code className="rounded bg-ink-700 px-1 py-0.5 text-gold-400">{"{link}"}</code> para
+            personalizar com o nome, o cargo e o link do perfil de cada contato.
           </p>
+        </section>
+
+        <section className="card space-y-4 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-serif text-lg text-gold-400">Cadência de acompanhamento</h2>
+              <p className="mt-0.5 text-xs text-cream/40">
+                Até 5 mensagens. Quem não responder recebe a próxima cópia após o intervalo de dias.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-gold-500"
+              checked={cadenceEnabled}
+              onChange={(e) => {
+                setCadenceEnabled(e.target.checked);
+                if (e.target.checked) {
+                  setCadence((c) => (c.length === 0 ? [{ body: message, waitDays: 3 }] : c));
+                  setUseFlow(false);
+                }
+              }}
+              aria-label="Ativar cadência de acompanhamento"
+            />
+          </div>
+
+          {cadenceEnabled && (
+            <div className="space-y-4">
+              {cadence.map((step, i) => (
+                <div key={i} className="space-y-2 rounded-lg border border-ink-400 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gold-400">
+                      Mensagem {i + 1}
+                      {i === 0 ? " (inicial)" : " (follow-up)"}
+                    </span>
+                    {cadence.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-xs text-cream/40 hover:text-red-400"
+                        onClick={() => removeCadenceStep(i)}
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    className="input min-h-24 resize-y"
+                    maxLength={300}
+                    value={step.body}
+                    onChange={(e) => updateCadenceBody(i, e.target.value)}
+                    placeholder="Olá {nome}, ... (use {nome}, {cargo} e {link})"
+                  />
+                  <p className="text-right text-xs text-cream/40">{step.body.length}/300</p>
+                  {i < cadence.length - 1 && (
+                    <div>
+                      <label className="label" htmlFor={`cadence-wait-${i}`}>
+                        Aguardar quantos dias antes da próxima?
+                      </label>
+                      <input
+                        id={`cadence-wait-${i}`}
+                        className="input"
+                        type="number"
+                        min={1}
+                        max={90}
+                        value={step.waitDays}
+                        onChange={(e) => updateCadenceWait(i, Number(e.target.value))}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {cadence.length < 5 && (
+                <button type="button" className="btn btn-secondary w-full" onClick={addCadenceStep}>
+                  Adicionar mensagem
+                </button>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="card p-5">
@@ -229,6 +325,7 @@ export function DisparoNewPage() {
                 checked={useFlow}
                 onChange={(e) => {
                   setUseFlow(e.target.checked);
+                  setCadenceEnabled(false);
                   setFlowOpen(e.target.checked);
                 }}
                 aria-label="Usar fluxo personalizado"
