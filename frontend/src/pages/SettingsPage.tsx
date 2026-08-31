@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import type { ConfigInfo, HealthInfo } from "../types";
 import { PageLoader } from "../components/Spinner";
 import { useToast, toastFromError } from "../components/Toast";
+import { CalendarSettingsSection } from "../components/CalendarSettingsSection";
 
 export function SettingsPage() {
   const { toast } = useToast();
@@ -213,6 +214,8 @@ export function SettingsPage() {
         <input className="input" type="password" placeholder="Nova senha (mín. 6)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} />
         <button type="submit" className="btn btn-primary">Alterar senha</button>
       </form>
+
+      <CalendarSettingsSection />
     </div>
   );
 }
