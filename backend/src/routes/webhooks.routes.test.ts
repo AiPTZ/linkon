@@ -246,6 +246,14 @@ describe("handleWebhookEvent (new_relation)", () => {
       data: { status: "ACCEPTED", acceptedAt: expect.any(Date) },
     });
   });
+
+  it("não cria contato quando a relação não tem lead vinculado", async () => {
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    await handleWebhookEvent({ event: "new_relation", user_provider_id: "M1", user_full_name: "João" });
+
+    expect(upsertContact).not.toHaveBeenCalled();
+  });
 });
 
 describe("parseWebhookBody", () => {
