@@ -11,6 +11,7 @@ import {
   CONFIDENCE_THRESHOLD,
 } from "./ai.service";
 import { refreshAgentCounters, agentWithinLimits } from "./native-agent.service";
+import { advanceScheduling, startBooking } from "./scheduling.service";
 import { logger } from "../utils/logger";
 import type { Campaign, Lead, Conversation } from "@prisma/client";
 
@@ -150,6 +151,47 @@ export async function handleIncomingMessage(input: {
     return "ignore";
   }
 
+  if (
+    conversation.scheduleState &&
+    conversation.scheduleState !== "NONE" &&
+    conversation.scheduleState !== "BOOKED"
+  ) {
+    try {
+      return await advanceScheduling({
+        userId: account.userId ?? null,
+        conversation: {
+          id: conversation.id,
+          scheduleState: conversation.scheduleState,
+          scheduleData: conversation.scheduleData ?? "{}",
+          unipileChatId: conversation.unipileChatId,
+        },
+        accountId: account.id,
+        leadId: input.leadId ?? null,
+        campaignId: input.campaignId ?? null,
+        leadName: lead?.name ?? null,
+        agent: {
+          schedulingEnabled: agent.schedulingEnabled,
+          meetingDurationMin: agent.meetingDurationMin,
+          meetingTitle: agent.meetingTitle,
+          tone: agent.tone,
+          transferMessage: agent.transferMessage,
+        },
+        productName: parseKnowledgeBase(agent.knowledgeBase).product || campaign?.name || "produto",
+        message: input.message,
+      });
+    } catch (err) {
+      await createLog({
+        type: "ERROR",
+        level: "ERROR",
+        message: `Falha na máquina de agendamento: ${(err as Error).message}`,
+        campaignId: input.campaignId ?? undefined,
+        leadId: input.leadId ?? undefined,
+        accountId: account.id,
+      });
+      return "transfer";
+    }
+  }
+
   const fresh = await refreshAgentCounters(account);
   const limit = agentWithinLimits({ agent, account: fresh });
   if (!limit.ok) {
@@ -212,6 +254,7 @@ export async function handleIncomingMessage(input: {
       history,
       message: input.message,
       transferMessage: agent.transferMessage?.trim() || "Vou te conectar com um especialista.",
+      schedulingActive: agent.schedulingEnabled,
     });
   } catch (err) {
     await transferToHuman({
@@ -224,6 +267,42 @@ export async function handleIncomingMessage(input: {
       leadId: input.leadId,
     });
     return "transfer";
+  }
+
+  if (decision.intent === "schedule" && agent.schedulingEnabled) {
+    try {
+      return await startBooking({
+        userId: account.userId ?? null,
+        conversation: {
+          id: conversation.id,
+          scheduleState: conversation.scheduleState,
+          scheduleData: conversation.scheduleData ?? "{}",
+          unipileChatId: conversation.unipileChatId,
+        },
+        accountId: account.id,
+        leadId: input.leadId ?? null,
+        campaignId: input.campaignId ?? null,
+        leadName: lead?.name ?? null,
+        agent: {
+          schedulingEnabled: agent.schedulingEnabled,
+          meetingDurationMin: agent.meetingDurationMin,
+          meetingTitle: agent.meetingTitle,
+          tone: agent.tone,
+          transferMessage: agent.transferMessage,
+        },
+        productName: kb.product || campaign?.name || "produto",
+      });
+    } catch (err) {
+      await createLog({
+        type: "ERROR",
+        level: "ERROR",
+        message: `Falha ao iniciar agendamento: ${(err as Error).message}`,
+        campaignId: input.campaignId ?? undefined,
+        leadId: input.leadId ?? undefined,
+        accountId: account.id,
+      });
+      return "transfer";
+    }
   }
 
   if (!decision.canAnswer || decision.confidence < CONFIDENCE_THRESHOLD) {

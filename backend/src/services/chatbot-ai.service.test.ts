@@ -212,3 +212,62 @@ describe("isConversationLocked", () => {
     expect(isConversationLocked("CLOSED")).toBe(true);
   });
 });
+
+vi.mock("./scheduling.service", () => ({
+  startBooking: vi.fn(),
+  advanceScheduling: vi.fn(),
+}));
+
+import { startBooking, advanceScheduling } from "./scheduling.service";
+
+describe("handleIncomingMessage scheduling", () => {
+  it("despacha para advanceScheduling quando há estado ativo", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(agent);
+    (prisma.conversation.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "CONV1",
+      status: "BOT",
+      scheduleState: "OFFERING",
+      scheduleData: "{}",
+      unipileChatId: "CHAT1",
+    });
+    (advanceScheduling as ReturnType<typeof vi.fn>).mockResolvedValue("reply");
+    const action = await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "o primeiro" });
+    expect(action).toBe("reply");
+    expect(advanceScheduling).toHaveBeenCalled();
+  });
+
+  it("despacha para startBooking quando intent é schedule", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...(agent as Record<string, unknown>),
+      schedulingEnabled: true,
+      meetingDurationMin: 30,
+      meetingTitle: "",
+    });
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(campaign);
+    (prisma.lead.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(lead);
+    (prisma.conversation.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "CONV1",
+      status: "BOT",
+      scheduleState: "NONE",
+      scheduleData: "{}",
+      unipileChatId: "CHAT1",
+    });
+    (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (generateDecision as ReturnType<typeof vi.fn>).mockResolvedValue({
+      reply: "Claro!",
+      canAnswer: true,
+      confidence: 0.9,
+      transfer: false,
+      intent: "schedule",
+      extracted: {},
+      tokensIn: 10,
+      tokensOut: 20,
+    });
+    (startBooking as ReturnType<typeof vi.fn>).mockResolvedValue("reply");
+    const action = await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "quero agendar" });
+    expect(action).toBe("reply");
+    expect(startBooking).toHaveBeenCalled();
+  });
+});
