@@ -18,6 +18,7 @@ import {
 import { validateFlow, serializeFlow, BLOCK_TYPES } from "../services/flow.service";
 import type { Flow } from "../services/flow.service";
 import { ApiError } from "../utils/errors";
+import { cadenceSchema, parseCadence, type CadenceStep } from "../utils/cadence";
 import { ah } from "./handler";
 
 export const campaignsRouter = Router();
@@ -57,16 +58,27 @@ const campaignObjectSchema = z.object({
   maxLeads: z.number().int().min(10).max(5000).default(1000),
   agentEnabled: z.boolean().default(true),
   flow: flowSchema.optional(),
+  cadence: cadenceSchema,
 });
 
-const campaignSchema = campaignObjectSchema.refine((d) => d.minDelayMin <= d.maxDelayMin, {
-  message: "minDelayMin deve ser menor ou igual a maxDelayMin",
-  path: ["minDelayMin"],
-});
+export const campaignSchema = campaignObjectSchema
+  .refine((d) => d.minDelayMin <= d.maxDelayMin, {
+    message: "minDelayMin deve ser menor ou igual a maxDelayMin",
+    path: ["minDelayMin"],
+  })
+  .superRefine((d, ctx) => {
+    if (d.cadence && d.mode !== "DISPARO") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Cadência só é válida no modo disparo",
+        path: ["cadence"],
+      });
+    }
+  });
 
-const updateCampaignSchema = campaignObjectSchema.partial();
+export const updateCampaignSchema = campaignObjectSchema.partial();
 
-function toData(body: z.infer<typeof campaignSchema> | z.infer<typeof updateCampaignSchema>) {
+export function toData(body: z.infer<typeof campaignSchema> | z.infer<typeof updateCampaignSchema>) {
   const data: Record<string, unknown> = {};
   const keys = [
     "name",
@@ -92,7 +104,15 @@ function toData(body: z.infer<typeof campaignSchema> | z.infer<typeof updateCamp
     if (!check.ok) throw new ApiError(400, check.errors.join("; "));
     data.flow = serialized;
   }
+  if (body.cadence !== undefined) {
+    data.cadence = JSON.stringify(body.cadence);
+  }
   return data;
+}
+
+export function withCadence<T extends object>(c: T): T & { cadence: CadenceStep[] } {
+  const raw = (c as { cadence?: string | null }).cadence;
+  return { ...c, cadence: parseCadence(raw) } as T & { cadence: CadenceStep[] };
 }
 
 async function withStats(campaignId: string) {
@@ -147,7 +167,8 @@ campaignsRouter.post(
     if (body.mode === "SWEEP" || body.mode === "DISPARO") {
       const hasFlowNodes = (body.flow?.nodes?.length ?? 0) > 0;
       const hasMessage = Boolean((body.inviteMessage ?? "").trim());
-      if (!hasFlowNodes && !hasMessage) {
+      const hasCadence = (body.cadence?.length ?? 0) > 0;
+      if (!hasFlowNodes && !hasMessage && !hasCadence) {
         throw new ApiError(
           400,
           body.mode === "DISPARO"
@@ -177,7 +198,7 @@ campaignsRouter.post(
         [key: string]: unknown;
       },
     });
-    res.status(201).json(campaign);
+    res.status(201).json(withCadence(campaign));
   }),
 );
 
@@ -223,7 +244,7 @@ campaignsRouter.get(
 
     res.json({
       items: campaigns.map((c) => ({
-        ...c,
+        ...withCadence(c),
         stats: {
           ...(statsByCampaign[c.id] ?? {}),
           total: c._count.leads,
@@ -241,16 +262,19 @@ campaignsRouter.get(
     const scoped = await getScopedCampaign(req, req.params.id);
     const campaign = await withStats(scoped.id);
     if (!campaign) throw new ApiError(404, "Campanha não encontrada");
-    res.json(campaign);
+    res.json(withCadence(campaign));
   }),
 );
 
 campaignsRouter.put(
   "/:id",
   ah(async (req, res) => {
-    await getScopedCampaign(req, req.params.id);
+    const existing = await getScopedCampaign(req, req.params.id);
 
     const body = updateCampaignSchema.parse(req.body);
+    if (body.cadence !== undefined && existing.mode !== "DISPARO") {
+      throw new ApiError(400, "Cadência só é válida no modo disparo");
+    }
     const data = toData(body);
     if (data.accountId) {
       const account = await prisma.account.findUnique({ where: { id: data.accountId as string } });
@@ -259,7 +283,7 @@ campaignsRouter.put(
     }
 
     const campaign = await prisma.campaign.update({ where: { id: req.params.id }, data });
-    res.json(campaign);
+    res.json(withCadence(campaign));
   }),
 );
 
