@@ -51,6 +51,29 @@ contactsRouter.get(
 );
 
 contactsRouter.get(
+  "/export-xlsx",
+  ah(async (req, res) => {
+    const scope = resolveScope(req);
+    const providerIds = typeof req.query.providerIds === "string" && req.query.providerIds.length > 0
+      ? req.query.providerIds.split(",").filter(Boolean)
+      : [];
+    const accountId = typeof req.query.accountId === "string" && req.query.accountId.length > 0
+      ? req.query.accountId
+      : null;
+    if (!accountId && scope.userId) {
+      throw new ApiError(400, "Informe o accountId para exportar contatos");
+    }
+    if (accountId) {
+      assertAccountInScope(await prisma.account.findUnique({ where: { id: accountId } }), scope.userId);
+    }
+    const { buffer, filename } = await buildContactsXlsx(accountId, providerIds);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }),
+);
+
+contactsRouter.get(
   "/:id",
   ah(async (req, res) => {
     const contact = await getContact(req.params.id, resolveScope(req).userId);
@@ -76,45 +99,26 @@ contactsRouter.post(
     const body = scrapeSchema.parse(req.body);
     const scope = resolveScope(req);
 
-    let accountId: string | null = null;
+    let accountIds: string[];
     if (body.contactIds && body.contactIds.length > 0) {
       const contact = await getContact(body.contactIds[0], scope.userId);
       if (!contact) throw new ApiError(404, "Contato não encontrado");
-      accountId = contact.accountId;
-    }
-
-    if (accountId) {
-      assertAccountInScope(await prisma.account.findUnique({ where: { id: accountId } }), scope.userId);
+      assertAccountInScope(await prisma.account.findUnique({ where: { id: contact.accountId } }), scope.userId);
+      accountIds = [contact.accountId];
     } else {
       const accounts = await prisma.account.findMany({
         where: scope.userId ? { userId: scope.userId } : {},
         select: { id: true },
       });
       if (accounts.length === 0) throw new ApiError(400, "Nenhuma conta conectada");
-      accountId = accounts[0].id;
+      accountIds = accounts.map((account) => account.id);
     }
 
-    const { scheduled } = await scheduleContactScrape(accountId, body.contactIds);
+    let scheduled = 0;
+    for (const accountId of accountIds) {
+      const result = await scheduleContactScrape(accountId, body.contactIds);
+      scheduled += result.scheduled;
+    }
     res.json({ ok: true, scheduled });
-  }),
-);
-
-contactsRouter.get(
-  "/export-xlsx",
-  ah(async (req, res) => {
-    const scope = resolveScope(req);
-    const providerIds = typeof req.query.providerIds === "string" && req.query.providerIds.length > 0
-      ? req.query.providerIds.split(",").filter(Boolean)
-      : [];
-    const accountId = typeof req.query.accountId === "string" && req.query.accountId.length > 0
-      ? req.query.accountId
-      : null;
-    if (accountId) {
-      assertAccountInScope(await prisma.account.findUnique({ where: { id: accountId } }), scope.userId);
-    }
-    const { buffer, filename } = await buildContactsXlsx(accountId, providerIds);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(buffer);
   }),
 );
