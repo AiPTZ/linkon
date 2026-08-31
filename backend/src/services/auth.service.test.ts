@@ -161,13 +161,23 @@ describe("confirmHosted", () => {
 });
 
 describe("confirmHosted (sync de rede)", () => {
-  it("enfileira sync-network para conta OK", async () => {
+  it("enfileira sync-network com o id local da conta criada (não o id da API do Unipile)", async () => {
     listAccounts.mockResolvedValue({
       items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }],
     });
     accountFind.mockResolvedValue(null);
     await confirmHosted("U1", { pending: false });
-    expect(queueAdd).toHaveBeenCalledWith("sync-network", { accountId: expect.any(String) });
+    expect(queueAdd).toHaveBeenCalledWith("sync-network", { accountId: "A1" });
+  });
+
+  it("enfileira sync-network com o id local ao reconfirmar conta existente OK", async () => {
+    listAccounts.mockResolvedValue({
+      items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }],
+    });
+    accountFind.mockResolvedValue({ id: "A1", unipileAccountId: "UA1", userId: "U1", status: "PENDING_LINKEDIN" });
+    accountUpdate.mockResolvedValue({ id: "A1", status: "OK" });
+    await confirmHosted("U1", { pending: false });
+    expect(queueAdd).toHaveBeenCalledWith("sync-network", { accountId: "A1" });
   });
 });
 
