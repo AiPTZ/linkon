@@ -5,6 +5,8 @@ import {
   buildSystemPrompt,
   generateDecision,
   generateInitialMessage,
+  generateExtraction,
+  generateConfirmationMessage,
   estimateCost,
 } from "./ai.service";
 
@@ -212,5 +214,83 @@ describe("estimateCost", () => {
   it("calcula custo gpt-4o-mini", () => {
     expect(estimateCost(1_000_000, 0)).toBeCloseTo(0.15);
     expect(estimateCost(0, 1_000_000)).toBeCloseTo(0.6);
+  });
+});
+
+describe("generateDecision intent", () => {
+  it("devolve intent default reply e extracted vazio sem scheduling", async () => {
+    mockOpenAi('{"reply":"ok","canAnswer":true,"confidence":0.9}');
+    const d = await generateDecision({
+      productName: "C",
+      knowledgeBase: KB,
+      tone: "consultivo",
+      history: [],
+      message: "oi",
+      transferMessage: "t",
+    });
+    expect(d.intent).toBe("reply");
+    expect(d.extracted).toEqual({});
+  });
+
+  it("aceita intent schedule quando schedulingActive", async () => {
+    mockOpenAi('{"reply":"ok","canAnswer":true,"confidence":0.9,"intent":"schedule"}');
+    const d = await generateDecision({
+      productName: "C",
+      knowledgeBase: KB,
+      tone: "consultivo",
+      history: [],
+      message: "quero agendar",
+      transferMessage: "t",
+      schedulingActive: true,
+    });
+    expect(d.intent).toBe("schedule");
+  });
+});
+
+describe("generateExtraction", () => {
+  it("extrai slot escolhido e e-mail", async () => {
+    mockOpenAi(
+      '{"reply":"Perfeito! Qual seu e-mail?","extracted":{"chosenSlotIndex":2,"email":"a@b.com"}}',
+    );
+    const out = await generateExtraction({
+      tone: "consultivo",
+      state: "OFFERING",
+      slots: [{ label: "seg., 01/09 às 14:00" }, { label: "ter., 02/09 às 10:00" }],
+      message: "quero o segundo",
+      transferMessage: "t",
+    });
+    expect(out.reply).toContain("e-mail");
+    expect(out.extracted.chosenSlotIndex).toBe(2);
+    expect(out.extracted.email).toBe("a@b.com");
+  });
+
+  it("marca wantsOtherTimes para horário fora da lista", async () => {
+    mockOpenAi('{"reply":"Temos outras opções.","extracted":{"wantsOtherTimes":true}}');
+    const out = await generateExtraction({
+      tone: "consultivo",
+      state: "OFFERING",
+      slots: [{ label: "seg., 01/09 às 14:00" }],
+      message: "só posso 7h",
+      transferMessage: "t",
+    });
+    expect(out.extracted.wantsOtherTimes).toBe(true);
+  });
+});
+
+describe("generateConfirmationMessage", () => {
+  it("preserva os fatos na reescrita e cai para canônico se omitir", async () => {
+    mockOpenAi("Confirmado! Vamos conversar no link, ok?");
+    const out = await generateConfirmationMessage({
+      tone: "consultivo",
+      facts: {
+        when: "seg., 01/09 às 14:00",
+        meetLink: "https://meet.google.com/abc",
+        email: "joao@x.com",
+        title: "Reunião X com João",
+      },
+    });
+    expect(out).toContain("seg., 01/09 às 14:00");
+    expect(out).toContain("https://meet.google.com/abc");
+    expect(out).toContain("joao@x.com");
   });
 });
