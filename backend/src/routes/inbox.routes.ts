@@ -95,7 +95,7 @@ inboxRouter.post(
       res.json(await suggestReply(req.params.id, userId, text));
     } catch (err) {
       if (err instanceof ApiError) throw err;
-      res.status(502).json({ error: `Falha ao gerar resposta: ${(err as Error).message}` });
+      res.status(502).json({ error: "Falha ao gerar resposta. Tente novamente." });
     }
   }),
 );

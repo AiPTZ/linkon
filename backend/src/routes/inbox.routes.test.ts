@@ -136,6 +136,6 @@ describe("POST /:id/suggest-reply", () => {
     (suggestReply as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("LLM down"));
     const { res } = await invokeRoute("post", "/:id/suggest-reply", {});
     expect(res.statusCode).toBe(502);
-    expect(res.body.error).toContain("LLM down");
+    expect(res.body.error).toContain("Falha ao gerar resposta");
   });
 });

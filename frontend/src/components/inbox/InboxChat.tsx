@@ -93,8 +93,12 @@ export function InboxChat({
     e.preventDefault();
     if (!conversation || !draft.trim()) return;
     const text = draft.trim();
-    setDraft("");
-    await onSend(text);
+    try {
+      await onSend(text);
+      setDraft("");
+    } catch {
+      // mantém o rascunho para o usuário tentar de novo
+    }
   }
 
   if (!conversation) {
