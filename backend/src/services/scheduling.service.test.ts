@@ -63,6 +63,7 @@ describe("generateSlots", () => {
     const occupied = [{ start: new Date("2026-08-31T13:00:00.000Z"), end: new Date("2026-08-31T14:00:00.000Z") }];
     const slots = generateSlots({ windows, durationMin: 30, occupied, now, count: 5 });
     expect(slots).toHaveLength(5);
+    expect(slots[0].start).toBe("2026-08-31T12:00:00.000Z"); // primeira janela às 09:00 BRT
     const occupiedOverlap = slots.filter((s) => new Date(s.start) < occupied[0].end && occupied[0].start < new Date(s.end));
     expect(occupiedOverlap).toHaveLength(0);
   });

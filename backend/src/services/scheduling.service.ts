@@ -120,7 +120,7 @@ export function generateSlots(input: {
     const weekday = new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay();
     const ws = windows.filter((w) => w.weekday === weekday);
     for (const w of ws) {
-      const midnightUtc = day.getTime() - tzOffsetMs(day, env.APP_TIMEZONE);
+      const midnightUtc = Date.UTC(p.year, p.month - 1, p.day) - tzOffsetMs(day, env.APP_TIMEZONE);
       const winStart = midnightUtc + w.startMin * 60_000;
       const winEnd = midnightUtc + w.endMin * 60_000;
       for (
