@@ -9,9 +9,16 @@ vi.mock("../lib/prisma", () => ({
 
 vi.mock("./unipile.service", () => ({ unipile: { sendChatMessage: vi.fn() } }));
 
+vi.mock("../services/ai.service", () => ({
+  generateHumanReply: vi.fn(),
+  parseKnowledgeBase: (raw: string) => JSON.parse(raw || "{}"),
+  estimateCost: (tIn: number, tOut: number) => (tIn / 1_000_000) * 0.15 + (tOut / 1_000_000) * 0.6,
+}));
+
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { listInbox, listMessages, sendHumanMessage, claimConversation, reactivateConversation, markConversationRead, updateConversation } from "./inbox.service";
+import { generateHumanReply } from "../services/ai.service";
+import { listInbox, listMessages, sendHumanMessage, claimConversation, reactivateConversation, markConversationRead, updateConversation, suggestReply } from "./inbox.service";
 import { ApiError } from "../utils/errors";
 
 beforeEach(() => vi.clearAllMocks());
@@ -198,5 +205,38 @@ describe("listMessages", () => {
     const arg = (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(arg.cursor).toEqual({ id: "M1" });
     expect(arg.skip).toBe(1);
+  });
+});
+
+describe("suggestReply", () => {
+  it("gera rascunho com base na última mensagem do lead e na base do agente", async () => {
+    (generateHumanReply as ReturnType<typeof vi.fn>).mockResolvedValue({ reply: "A partir de R$ 97/mês.", tokensIn: 100, tokensOut: 20 });
+    (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "CV1",
+      accountId: "A1",
+      lead: { name: "João", headline: "CEO" },
+      account: { nativeAgent: { knowledgeBase: JSON.stringify({ product: "LinkON", faq: [], prices: [], differentiators: [], objections: [] }), tone: "consultivo" } },
+    });
+    (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { role: "LEAD", content: "qual o preço?", createdAt: new Date("2026-09-01T10:00:00Z") },
+      { role: "BOT", content: "Posso ajudar!", createdAt: new Date("2026-09-01T10:01:00Z") },
+    ]);
+    const res = await suggestReply("CV1", "U1");
+    expect(res.reply).toContain("R$ 97");
+    expect(res.costUsd).toBeCloseTo(100 / 1_000_000 * 0.15 + 20 / 1_000_000 * 0.6);
+    expect(generateHumanReply).toHaveBeenCalledWith(
+      expect.objectContaining({ productName: "LinkON", message: "qual o preço?" }),
+    );
+  });
+
+  it("lança 400 quando não há mensagem para responder", async () => {
+    (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "CV1",
+      accountId: "A1",
+      lead: null,
+      account: { nativeAgent: null },
+    });
+    (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await expect(suggestReply("CV1", "U1")).rejects.toThrow(ApiError);
   });
 });

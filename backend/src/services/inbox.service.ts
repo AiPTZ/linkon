@@ -229,10 +229,11 @@ export async function suggestReply(
   const kb = parseKnowledgeBase(agent?.knowledgeBase ?? "");
   const historyRows = await prisma.conversationMessage.findMany({
     where: { conversationId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: 8,
   });
   const history = historyRows
+    .reverse()
     .filter((m) => m.role === "LEAD" || m.role === "BOT")
     .map((m) => ({ role: (m.role === "LEAD" ? "lead" : "bot") as "lead" | "bot", content: m.content }));
   const lastLead = historyRows.filter((m) => m.role === "LEAD").pop();
