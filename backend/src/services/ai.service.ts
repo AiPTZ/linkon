@@ -395,3 +395,66 @@ export async function generateConfirmationMessage(input: {
     return canonical;
   }
 }
+
+export async function generateHumanReply(input: {
+  productName: string;
+  knowledgeBase: KnowledgeBase;
+  tone: string;
+  leadName?: string | null;
+  leadHeadline?: string | null;
+  history: HistoryItem[];
+  message: string;
+  maxChars?: number;
+}): Promise<{ reply: string; tokensIn: number; tokensOut: number }> {
+  const maxChars = input.maxChars ?? 400;
+  const kb = input.knowledgeBase;
+  const baseBlock = [
+    `Produto: ${input.productName}`,
+    kb.faq.length ? `FAQ:\n${kb.faq.map((f) => `- ${f.q}\n  ${f.a}`).join("\n")}` : "",
+    kb.prices.length ? `Preços:\n${kb.prices.map((p) => `- ${p}`).join("\n")}` : "",
+    kb.differentiators.length ? `Diferenciais:\n${kb.differentiators.map((d) => `- ${d}`).join("\n")}` : "",
+    kb.objections.length ? `Objeções:\n${kb.objections.map((o) => `- ${o}`).join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const leadLine = input.leadName
+    ? `Lead: ${input.leadName}${input.leadHeadline ? ` (${input.leadHeadline})` : ""}`
+    : "";
+  const system = [
+    `Você é o vendedor respondendo a um lead no LinkedIn sobre o produto "${input.productName}".`,
+    `Tom de voz: ${input.tone}. Responda em português do Brasil, curto e direto (até ${maxChars} caracteres).`,
+    "Responda SOMENTE com base na base de conhecimento abaixo. NUNCA invente preço, prazo, recurso ou promessa.",
+    `Base de conhecimento:\n${baseBlock}`,
+    leadLine,
+    'Responda SEMPRE em JSON no formato: {"reply": "sua resposta"}',
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const history: ChatMessage[] = input.history.slice(-8).map((h) => ({
+    role: h.role === "lead" ? "user" : "assistant",
+    content: h.content,
+  }));
+  const { content, tokensIn, tokensOut } = await chatCompletion({
+    messages: [
+      { role: "system", content: system },
+      ...history,
+      { role: "user", content: input.message },
+    ],
+    temperature: 0.4,
+    json: true,
+    maxTokens: maxChars,
+  });
+  let parsed: { reply?: unknown };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    logger.error("generateHumanReply: resposta não é JSON", content);
+    throw new Error("resposta inválida do LLM");
+  }
+  const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+  if (!reply) {
+    logger.error("generateHumanReply: reply vazio", content);
+    throw new Error("resposta inválida do LLM");
+  }
+  return { reply, tokensIn, tokensOut };
+}

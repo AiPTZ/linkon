@@ -7,6 +7,7 @@ import {
   generateInitialMessage,
   generateExtraction,
   generateConfirmationMessage,
+  generateHumanReply,
   estimateCost,
 } from "./ai.service";
 
@@ -292,5 +293,38 @@ describe("generateConfirmationMessage", () => {
     expect(out).toContain("seg., 01/09 às 14:00");
     expect(out).toContain("https://meet.google.com/abc");
     expect(out).toContain("joao@x.com");
+  });
+});
+
+describe("generateHumanReply", () => {
+  it("chama chat/completions e devolve o rascunho", async () => {
+    mockOpenAi('{"reply":"A partir de R$ 97/mês. Quer agendar uma demo?"}');
+    const out = await generateHumanReply({
+      productName: "Campanha Tech",
+      knowledgeBase: KB,
+      tone: "consultivo",
+      leadName: "João",
+      history: [],
+      message: "qual o preço?",
+    });
+    expect(out.reply).toContain("R$ 97");
+    expect(out.tokensIn).toBe(1000);
+    expect(out.tokensOut).toBe(200);
+    const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+    expect(body.temperature).toBe(0.4);
+    expect(body.response_format.type).toBe("json_object");
+  });
+
+  it("lança erro quando o JSON não é válido", async () => {
+    mockOpenAi("resposta quebrada");
+    await expect(
+      generateHumanReply({
+        productName: "C",
+        knowledgeBase: KB,
+        tone: "consultivo",
+        history: [],
+        message: "oi",
+      }),
+    ).rejects.toThrow("resposta inválida do LLM");
   });
 });
