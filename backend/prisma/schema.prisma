@@ -23,9 +23,12 @@ model User {
   status       String     @default("PENDING")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-  accounts     Account[]
-  campaigns    Campaign[]
-  extractions  Extraction[]
+  accounts              Account[]
+  campaigns             Campaign[]
+  calendarConnection    CalendarConnection?
+  sellerAvailability    SellerAvailability?
+  bookings              Booking[]
+  extractions           Extraction[]
 }
 
 model Account {
@@ -51,6 +54,7 @@ model Account {
   logs                 LogEvent[]
   extractions          Extraction[]
   conversations        Conversation[]
+  bookings            Booking[]
 }
 
 model Campaign {
@@ -99,6 +103,9 @@ model NativeAgent {
   replyWeeklyLimit   Int      @default(400)
   initialMessageMode String   @default("TEMPLATE")
   initialTemplate    String   @default("")
+  schedulingEnabled   Boolean  @default(false)
+  meetingDurationMin  Int      @default(30)
+  meetingTitle        String   @default("")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -224,6 +231,9 @@ model Conversation {
   lastMessageAt DateTime              @default(now())
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
+  scheduleState       String    @default("NONE")
+  scheduleData        String    @default("{}")
+  bookings            Booking[]
   campaign      Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   lead          Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
   account       Account               @relation(fields: [accountId], references: [id])
@@ -247,6 +257,51 @@ model ConversationMessage {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+}
+
+model CalendarConnection {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  refreshToken   String   @default("")
+  googleEmail    String   @default("")
+  status         String   @default("DISCONNECTED")
+  disconnectedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SellerAvailability {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  windows   String   @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id             String       @id @default(cuid())
+  userId         String
+  accountId      String
+  conversationId String
+  leadName       String?
+  leadEmail      String
+  startTime      DateTime
+  endTime        DateTime
+  title          String       @default("")
+  googleEventId  String?
+  meetLink       String?
+  status         String       @default("CONFIRMING")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, startTime, endTime])
+  @@index([userId, status])
+  @@index([conversationId])
 }
 
 model AiEvaluationRun {
