@@ -298,4 +298,40 @@ describe("advanceScheduling", () => {
       expect.objectContaining({ data: expect.objectContaining({ status: "CONFIRMED", googleEventId: "EV1" }) }),
     );
   });
+
+  it("interpola {produto} e {leadName} no título do evento", async () => {
+    const data = {
+      slots: [
+        { start: "2026-09-01T17:00:00.000Z", end: "2026-09-01T17:30:00.000Z", label: "seg., 01/09 às 14:00" },
+      ],
+      offeringRound: 1,
+      emailAttempts: 0,
+      email: "joao@x.com",
+      chosenSlot: { start: "2026-09-01T17:00:00.000Z", end: "2026-09-01T17:30:00.000Z", label: "seg., 01/09 às 14:00" },
+    };
+    const ctx = {
+      ...base,
+      agent: { ...base.agent, meetingTitle: "Demo {produto} p/ {leadName}" },
+      conversation: { ...base.conversation, scheduleState: "AWAITING_EMAIL", scheduleData: JSON.stringify(data) },
+    };
+    (prisma.calendarConnection.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "CONNECTED",
+      refreshToken: "enc:abc",
+    });
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation((cb: (tx: unknown) => Promise<unknown>) =>
+      cb(prisma),
+    );
+    (prisma.booking.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "B1" });
+    (createEventRobust as ReturnType<typeof vi.fn>).mockResolvedValue({
+      eventId: "EV1",
+      meetLink: "https://meet.google.com/abc",
+    });
+    (prisma.booking.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (generateConfirmationMessage as ReturnType<typeof vi.fn>).mockResolvedValue("Confirmado!");
+    (unipile.sendChatMessage as ReturnType<typeof vi.fn>).mockResolvedValue({ message_id: "M5" });
+    await advanceScheduling({ ...ctx, message: "meu email é joao@x.com" });
+    expect(prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ title: "Demo LinkON p/ João" }) }),
+    );
+  });
 });

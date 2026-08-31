@@ -188,6 +188,15 @@ export async function handleIncomingMessage(input: {
         leadId: input.leadId ?? undefined,
         accountId: account.id,
       });
+      await transferToHuman({
+        accountId: account.id,
+        chatId: input.chatId,
+        conversationId: conversation.id,
+        reason: "scheduling_error",
+        transferText: agent.transferMessage,
+        campaignId: input.campaignId,
+        leadId: input.leadId,
+      });
       return "transfer";
     }
   }
@@ -300,6 +309,15 @@ export async function handleIncomingMessage(input: {
         campaignId: input.campaignId ?? undefined,
         leadId: input.leadId ?? undefined,
         accountId: account.id,
+      });
+      await transferToHuman({
+        accountId: account.id,
+        chatId: input.chatId,
+        conversationId: conversation.id,
+        reason: "scheduling_error",
+        transferText: agent.transferMessage,
+        campaignId: input.campaignId,
+        leadId: input.leadId,
       });
       return "transfer";
     }

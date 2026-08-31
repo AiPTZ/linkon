@@ -471,7 +471,11 @@ async function completeBooking(ctx: SchedulingContext, data: ScheduleData): Prom
     return transferScheduling(ctx, "calendar_unavailable");
   }
 
-  const title = (ctx.agent.meetingTitle || `Reunião ${ctx.productName} com ${ctx.leadName ?? "lead"}`).trim();
+  const rawTitle = ctx.agent.meetingTitle || `Reunião {produto} com {leadName}`;
+  const title = rawTitle
+    .replaceAll("{produto}", ctx.productName)
+    .replaceAll("{leadName}", ctx.leadName ?? "lead")
+    .trim();
 
   let bookingId: string;
   try {
