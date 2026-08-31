@@ -1,16 +1,28 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { ZodError } from "zod";
 
-vi.mock("../lib/prisma", () => ({
-  prisma: {
-    conversation: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
-    conversationMessage: { findMany: vi.fn(), create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
-  },
+vi.mock("../services/inbox.service", () => ({
+  listInbox: vi.fn(),
+  listMessages: vi.fn(),
+  sendHumanMessage: vi.fn(),
+  claimConversation: vi.fn(),
+  reactivateConversation: vi.fn(),
+  markConversationRead: vi.fn(),
+  updateConversation: vi.fn(),
+  suggestReply: vi.fn(),
 }));
 
-vi.mock("../services/unipile.service", () => ({ unipile: { sendChatMessage: vi.fn() } }));
-
-import { prisma } from "../lib/prisma";
 import { inboxRouter } from "./inbox.routes";
+import {
+  listInbox,
+  listMessages,
+  sendHumanMessage,
+  claimConversation,
+  reactivateConversation,
+  markConversationRead,
+  updateConversation,
+  suggestReply,
+} from "../services/inbox.service";
 
 type MockReq = {
   user?: unknown;
@@ -54,7 +66,7 @@ async function invokeRoute(method: "get" | "post" | "patch", path: string, req: 
     },
   };
   const next = vi.fn();
-  const fullReq = { user: { sub: "U1", role: "USER" }, headers: {}, query: {}, body: {}, params: {}, ...req };
+  const fullReq = { user: { sub: "U1", role: "USER" }, headers: {}, query: {}, body: {}, params: { id: "CV1" }, ...req };
   handle(fullReq, res, next);
   await new Promise((r) => setTimeout(r, 0));
   return { res, next };
@@ -62,8 +74,68 @@ async function invokeRoute(method: "get" | "post" | "patch", path: string, req: 
 
 beforeEach(() => vi.clearAllMocks());
 
-describe("inbox routes placeholder", () => {
-  it("is overwritten by a later task", () => {
-    expect(true).toBe(true);
+describe("GET /", () => {
+  it("repassa offset/limit para listInbox", async () => {
+    (listInbox as ReturnType<typeof vi.fn>).mockResolvedValue({ items: [], needsHuman: 0, total: 0, hasMore: false });
+    const { res } = await invokeRoute("get", "/", { query: { offset: "10", limit: "25" } });
+    expect(listInbox).toHaveBeenCalledWith("U1", { offset: 10, limit: 25 });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.hasMore).toBe(false);
+  });
+
+  it("usa defaults quando offset/limit não são numéricos", async () => {
+    (listInbox as ReturnType<typeof vi.fn>).mockResolvedValue({ items: [], needsHuman: 0, total: 0, hasMore: false });
+    const { res } = await invokeRoute("get", "/", { query: { offset: "abc", limit: "-3" } });
+    expect(listInbox).toHaveBeenCalledWith("U1", { offset: 0, limit: 50 });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("GET /:id/messages", () => {
+  it("repassa cursor e limit", async () => {
+    (listMessages as ReturnType<typeof vi.fn>).mockResolvedValue({ items: [], nextCursor: null });
+    const { res } = await invokeRoute("get", "/:id/messages", { query: { cursor: "M1", limit: "10" } });
+    expect(listMessages).toHaveBeenCalledWith("CV1", "U1", { cursor: "M1", limit: 10 });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("POST /:id/read", () => {
+  it("retorna 204", async () => {
+    (markConversationRead as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+    const { res } = await invokeRoute("post", "/:id/read", {});
+    expect(markConversationRead).toHaveBeenCalledWith("CV1", "U1");
+    expect(res.statusCode).toBe(204);
+    expect(res.ended).toBe(true);
+  });
+});
+
+describe("PATCH /:id", () => {
+  it("atualiza nota e resolvida", async () => {
+    (updateConversation as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CV1", note: "x", resolved: true });
+    const { res } = await invokeRoute("patch", "/:id", { body: { note: "x", resolved: true } });
+    expect(updateConversation).toHaveBeenCalledWith("CV1", "U1", { note: "x", resolved: true });
+    expect(res.body.resolved).toBe(true);
+  });
+
+  it("rejeita campos inválidos com ZodError", async () => {
+    const { next } = await invokeRoute("patch", "/:id", { body: { note: 123 } });
+    expect(next).toHaveBeenCalledWith(expect.any(ZodError));
+  });
+});
+
+describe("POST /:id/suggest-reply", () => {
+  it("retorna rascunho e custo", async () => {
+    (suggestReply as ReturnType<typeof vi.fn>).mockResolvedValue({ reply: "Rascunho", costUsd: 0.001 });
+    const { res } = await invokeRoute("post", "/:id/suggest-reply", {});
+    expect(suggestReply).toHaveBeenCalledWith("CV1", "U1", undefined);
+    expect(res.body.reply).toBe("Rascunho");
+  });
+
+  it("retorna 502 quando o LLM falha", async () => {
+    (suggestReply as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("LLM down"));
+    const { res } = await invokeRoute("post", "/:id/suggest-reply", {});
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error).toContain("LLM down");
   });
 });
