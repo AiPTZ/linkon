@@ -239,6 +239,7 @@ export function CampaignDetailPage() {
   }, [campaign]);
 
   const isBroadcast = campaign?.mode === "DISPARO";
+  const cadenceLength = campaign?.cadence?.length ?? 0;
   const sentCount = (stats.completed ?? 0) + (stats.responded ?? 0);
   const replyRate = sentCount > 0 ? Math.round(((stats.responded ?? 0) / sentCount) * 100) : 0;
 
@@ -590,6 +591,13 @@ export function CampaignDetailPage() {
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={lead.status} kind="lead" />
+                          {isBroadcast && cadenceLength > 1 && (lead.status === "PENDING" || lead.status === "COMPLETED") && (
+                            <span className="mt-1 block text-xs text-cream/50">
+                              {lead.cadenceStep >= cadenceLength
+                                ? "cadência concluída"
+                                : `cópia ${lead.cadenceStep + 1}/${cadenceLength}`}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-cream/50">
                           {formatDateTime(isBroadcast ? lead.lastMessageAt : lead.invitedAt)}
