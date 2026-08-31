@@ -13,12 +13,36 @@ import type { Campaign } from "@prisma/client";
 export function startScheduler(): void {
   cron.schedule("*/5 * * * *", async () => {
     try {
-      await Promise.all([processCampaigns(), refreshAgentCountersForAll()]);
+      await Promise.all([processCampaigns(), refreshAgentCountersForAll(), expireStaleScheduling()]);
     } catch (err) {
       logger.error("scheduler error", err);
     }
   });
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      await expireStaleScheduling();
+    } catch (err) {
+      logger.error("expireStaleScheduling error", err);
+    }
+  });
   logger.info("Scheduler started (runs every 5 minutes)");
+}
+
+export async function expireStaleScheduling(): Promise<void> {
+  const cutoff = new Date(Date.now() - 24 * 3600 * 1000);
+  const stale = await prisma.conversation.findMany({
+    where: {
+      scheduleState: { in: ["OFFERING", "AWAITING_EMAIL", "CONFIRMING"] },
+      updatedAt: { lt: cutoff },
+    },
+    select: { id: true },
+  });
+  for (const c of stale) {
+    await prisma.conversation.update({
+      where: { id: c.id },
+      data: { scheduleState: "NONE", scheduleData: "{}" },
+    });
+  }
 }
 
 async function processCampaigns(): Promise<void> {

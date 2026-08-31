@@ -5,6 +5,7 @@ vi.mock("./lib/prisma", () => ({
     campaign: { findMany: vi.fn(), update: vi.fn() },
     lead: { findFirst: vi.fn(), count: vi.fn(), update: vi.fn() },
     account: { findUnique: vi.fn(), findMany: vi.fn() },
+    conversation: { findMany: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -42,7 +43,7 @@ import { refreshAgentCounters } from "./services/native-agent.service";
 import { sweepQueue, invitesQueue } from "./services/queue.service";
 import { notify } from "./services/notification.service";
 import { hasFlow } from "./services/flow.service";
-import { processBroadcastCampaign, processFlowCampaign, processInviteCampaign, refreshAgentCountersForAll } from "./scheduler";
+import { processBroadcastCampaign, processFlowCampaign, processInviteCampaign, refreshAgentCountersForAll, expireStaleScheduling } from "./scheduler";
 import type { Campaign, Account, Lead } from "@prisma/client";
 
 const leadFindFirst = prisma.lead.findFirst as ReturnType<typeof vi.fn>;
@@ -235,5 +236,18 @@ describe("refreshAgentCountersForAll", () => {
     agentRefresh.mockResolvedValue({});
     await refreshAgentCountersForAll();
     expect(agentRefresh).toHaveBeenCalledWith(expect.objectContaining({ id: "A1" }));
+  });
+});
+
+describe("expireStaleScheduling", () => {
+  it("zera conversas com agendamento ativo há mais de 24h", async () => {
+    (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "C1" }]);
+    await expireStaleScheduling();
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "C1" },
+        data: expect.objectContaining({ scheduleState: "NONE" }),
+      }),
+    );
   });
 });
