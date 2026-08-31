@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { resolveScope } from "../utils/scope";
-import { listInbox, listMessages, sendHumanMessage, claimConversation, reactivateConversation, markConversationRead, updateConversation } from "../services/inbox.service";
+import { listInbox, listMessages, sendHumanMessage, claimConversation, reactivateConversation, markConversationRead, updateConversation, suggestReply } from "../services/inbox.service";
+import { ApiError } from "../utils/errors";
 import { ah } from "./handler";
 
 export const inboxRouter = Router();
@@ -80,5 +81,21 @@ inboxRouter.patch(
     const { userId } = resolveScope(req);
     const body = patchSchema.parse(req.body);
     res.json(await updateConversation(req.params.id, userId, body));
+  }),
+);
+
+const suggestSchema = z.object({ text: z.string().max(3000).optional() });
+
+inboxRouter.post(
+  "/:id/suggest-reply",
+  ah(async (req, res) => {
+    const { userId } = resolveScope(req);
+    const { text } = suggestSchema.parse(req.body);
+    try {
+      res.json(await suggestReply(req.params.id, userId, text));
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      res.status(502).json({ error: `Falha ao gerar resposta: ${(err as Error).message}` });
+    }
   }),
 );

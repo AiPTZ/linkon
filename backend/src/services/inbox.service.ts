@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
 import { ApiError } from "../utils/errors";
+import { generateHumanReply, parseKnowledgeBase, estimateCost } from "./ai.service";
 import type { ConversationMessage } from "@prisma/client";
 
 interface InboxItem {
@@ -209,4 +210,42 @@ export async function updateConversation(
     note: data.note ?? c.note,
     resolved: data.resolved ?? c.resolved,
   });
+}
+
+export async function suggestReply(
+  conversationId: string,
+  userId: string | null,
+  text?: string,
+): Promise<{ reply: string; costUsd: number }> {
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, account: { userId } },
+    include: {
+      lead: { select: { name: true, headline: true } },
+      account: { include: { nativeAgent: true } },
+    },
+  });
+  if (!conv) throw new ApiError(404, "Conversa não encontrada");
+  const agent = conv.account.nativeAgent;
+  const kb = parseKnowledgeBase(agent?.knowledgeBase ?? "");
+  const historyRows = await prisma.conversationMessage.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: "asc" },
+    take: 8,
+  });
+  const history = historyRows
+    .filter((m) => m.role === "LEAD" || m.role === "BOT")
+    .map((m) => ({ role: (m.role === "LEAD" ? "lead" : "bot") as "lead" | "bot", content: m.content }));
+  const lastLead = historyRows.filter((m) => m.role === "LEAD").pop();
+  const message = text?.trim() || lastLead?.content || "";
+  if (!message) throw new ApiError(400, "Nenhuma mensagem para responder");
+  const out = await generateHumanReply({
+    productName: kb.product || "produto",
+    knowledgeBase: kb,
+    tone: agent?.tone || "consultivo e profissional",
+    leadName: conv.lead?.name ?? null,
+    leadHeadline: conv.lead?.headline ?? null,
+    history,
+    message,
+  });
+  return { reply: out.reply, costUsd: estimateCost(out.tokensIn, out.tokensOut) };
 }
