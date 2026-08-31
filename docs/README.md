@@ -8,6 +8,7 @@
 | --- | --- |
 | [README](../README.md) | Porta de entrada: o que é, como rodar, contas demo, segurança |
 | [HANDOFF.md](./HANDOFF.md) | Passagem de bastão: estado atual, segurança/Cloudflare, operação e gotchas |
+| [SECURITY.md](./SECURITY.md) | Segurança: tratamento dos findings do relatório GitGuard (fixes + aceites) |
 | [PRODUCT.md](./PRODUCT.md) | O produto: visão, personas, funcionalidades, papéis e contas demo |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Arquitetura: stack, componentes, modelo de dados, filas e fluxos |
 | [API.md](./API.md) | Referência completa da API REST (100% das rotas) |

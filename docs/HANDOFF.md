@@ -177,6 +177,13 @@ só atrás de HTTPS).
 5. Troque `DATABASE_URL` para Postgres em produção (o Prisma já está pronto).
 6. Rode `npm run build` e suba `dist/` + `node dist/workers/*.js` com um gerenciador de processos.
 
+### 5.7. Relatório de segurança GitGuard
+
+Os achados do GitGuard (Semgrep + Trivy) do commit `cb3f0ed` foram tratados: dependências atualizadas
+(`brace-expansion@5.0.9`, `uuid@14.0.2`, `react-router-dom@7.18.3`), tag GCM explícita e RNG criptográfico.
+Três findings foram avaliados como não aplicáveis/aceitos. Detalhes e justificativas:
+[docs/SECURITY.md](./SECURITY.md).
+
 ---
 
 ## 6. Operação

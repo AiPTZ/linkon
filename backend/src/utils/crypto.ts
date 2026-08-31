@@ -7,7 +7,7 @@ function getKey(): Buffer {
 
 export function encrypt(plain: string): string {
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", getKey(), iv);
+  const cipher = crypto.createCipheriv("aes-256-gcm", getKey(), iv, { authTagLength: 16 });
   const enc = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return [iv.toString("base64"), tag.toString("base64"), enc.toString("base64")].join(":");
@@ -18,7 +18,9 @@ export function decrypt(payload: string): string {
   if (!ivB64 || !tagB64 || !dataB64) {
     throw new Error("Invalid encrypted payload");
   }
-  const decipher = crypto.createDecipheriv("aes-256-gcm", getKey(), Buffer.from(ivB64, "base64"));
+  const decipher = crypto.createDecipheriv("aes-256-gcm", getKey(), Buffer.from(ivB64, "base64"), {
+    authTagLength: 16,
+  });
   decipher.setAuthTag(Buffer.from(tagB64, "base64"));
   return Buffer.concat([
     decipher.update(Buffer.from(dataB64, "base64")),

@@ -117,7 +117,10 @@ na aba **Administração → Usuários** (nasce `ACTIVE`).
   `Permissions-Policy`, HSTS atrás de HTTPS).
 - Webhooks da Unipile são validados por segredo compartilhado (`UNIPILE_WEBHOOK_SECRET` nos headers
   `unipile-auth` ou `authorization`) com comparação **timing-safe**.
-- Credenciais de contas são criptografadas em repouso (AES-256-GCM).
+- Credenciais de contas são criptografadas em repouso (AES-256-GCM com tag GCM de 16 bytes explícita).
+- Dependências mantidas atualizadas por `overrides` no root (`brace-expansion@5.0.9`, `uuid@14.0.2`),
+  e `react-router-dom@7.x` no frontend — tratamento completo do relatório GitGuard em
+  [docs/SECURITY.md](./docs/SECURITY.md).
 
 > Detalhes de deploy, Cloudflare e operação: [docs/HANDOFF.md](./docs/HANDOFF.md).
 

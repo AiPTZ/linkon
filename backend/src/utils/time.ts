@@ -1,12 +1,13 @@
+import crypto from "crypto";
 import { env } from "../config/env";
 
 export function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  return crypto.randomInt(min, max + 1);
 }
 
 export function randomDelayMs(minMinutes: number, maxMinutes: number): number {
   const minutes = randomInt(minMinutes, maxMinutes);
-  return minutes * 60_000 + Math.floor(Math.random() * 60_000);
+  return minutes * 60_000 + crypto.randomInt(0, 60_000);
 }
 
 export function sleep(ms: number): Promise<void> {
