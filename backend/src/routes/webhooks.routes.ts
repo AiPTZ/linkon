@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { chatbotQueue } from "../services/queue.service";
 import { createLog } from "../services/log.service";
 import { advanceOnEvent, hasFlow } from "../services/flow.service";
+import { upsertRelationContact } from "../services/network.service";
 import { unipile } from "../services/unipile.service";
 import { getOrCreateConversation, recordMessage, isConversationLocked } from "../services/chatbot-ai.service";
 import { env } from "../config/env";
@@ -236,6 +237,8 @@ async function handleNewRelation(event: RelationWebhook): Promise<void> {
 
   const campaign = await prisma.campaign.findUnique({ where: { id: lead.campaignId } });
   if (!campaign) return;
+
+  await upsertRelationContact(campaign.accountId, providerId, event.user_full_name);
 
   if (event.user_full_name && event.user_full_name !== lead.name) {
     await prisma.lead.update({

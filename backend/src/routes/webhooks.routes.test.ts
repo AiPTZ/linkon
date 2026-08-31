@@ -4,6 +4,7 @@ vi.mock("../lib/prisma", () => ({
   prisma: {
     lead: { findMany: vi.fn(), update: vi.fn() },
     campaign: { findUnique: vi.fn() },
+    contact: { upsert: vi.fn() },
     conversation: { findUnique: vi.fn(), update: vi.fn(), upsert: vi.fn() },
     conversationMessage: { create: vi.fn() },
     account: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
@@ -23,6 +24,9 @@ vi.mock("../services/chatbot-ai.service", () => ({
   recordMessage: vi.fn(),
   isConversationLocked: vi.fn(() => false),
 }));
+vi.mock("../services/network.service", () => ({
+  upsertRelationContact: vi.fn(),
+}));
 vi.mock("../config/env", () => ({ env: {} }));
 vi.mock("../utils/time", () => ({ randomInt: (min: number) => min }));
 
@@ -30,12 +34,15 @@ import { prisma } from "../lib/prisma";
 import { chatbotQueue } from "../services/queue.service";
 import { createLog } from "../services/log.service";
 import { getOrCreateConversation } from "../services/chatbot-ai.service";
+import { upsertRelationContact } from "../services/network.service";
 import {
   pickBestLead,
   parseWebhookBody,
   handleWebhookEvent,
   type WebhookLeadCandidate,
 } from "./webhooks.routes";
+
+const upsertContact = upsertRelationContact as ReturnType<typeof vi.fn>;
 
 function lead(overrides: Partial<WebhookLeadCandidate>): WebhookLeadCandidate {
   return {
@@ -215,6 +222,29 @@ describe("handleWebhookEvent", () => {
       expect.objectContaining({ accountId: "A1", chatId: "CHAT3", message: "olá" }),
       expect.any(Object),
     );
+  });
+});
+
+describe("handleWebhookEvent (new_relation)", () => {
+  it("cria contato além de marcar lead como ACCEPTED", async () => {
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "L1",
+        campaignId: "C1",
+        createdAt: new Date("2026-08-28T12:00:00Z"),
+        campaign: { status: "RUNNING" },
+      },
+    ]);
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "C1", accountId: "A1", status: "RUNNING" });
+    (prisma.contact.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    await handleWebhookEvent({ event: "new_relation", user_provider_id: "M1", user_full_name: "João" });
+
+    expect(upsertContact).toHaveBeenCalledWith("A1", "M1", "João");
+    expect(prisma.lead.update).toHaveBeenCalledWith({
+      where: { id: "L1" },
+      data: { status: "ACCEPTED", acceptedAt: expect.any(Date) },
+    });
   });
 });
 
