@@ -23,7 +23,7 @@ export interface AdminUser extends AuthUser {
   whatsapp: string | null;
   status: UserStatus;
   createdAt: string;
-  _count?: { accounts: number; campaigns: number; extractions: number };
+  _count?: { accounts: number; campaigns: number; contacts: number };
 }
 
 export type AccountStatus =
@@ -312,29 +312,9 @@ export interface Notification {
   createdAt: string;
 }
 
-export type ExtractionStatus = "PROCESSING" | "COMPLETED" | "FAILED";
-
-export interface Extraction {
+export interface Contact {
   id: string;
-  name: string;
-  searchUrl: string;
   accountId: string;
-  account: { id: string; username: string | null };
-  status: ExtractionStatus;
-  maxResults: number;
-  totalFound: number;
-  processed: number;
-  withContact: number;
-  error: string | null;
-  leadsCount: number;
-  createdAt: string;
-  updatedAt: string;
-  user?: { id: string; username: string | null } | null;
-}
-
-export interface ExtractedLead {
-  id: string;
-  extractionId: string;
   providerId: string;
   publicIdentifier: string | null;
   name: string | null;
@@ -346,6 +326,16 @@ export interface ExtractedLead {
   networkDistance: string | null;
   scrapedAt: string | null;
   createdAt: string;
+  account?: { id: string; username: string | null };
+}
+
+export interface ContactListResponse {
+  items: Contact[];
+  total: number;
+}
+
+export interface ContactSyncResponse {
+  ok: boolean;
 }
 
 export interface NotificationsResponse {

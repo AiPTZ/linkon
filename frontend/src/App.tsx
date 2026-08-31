@@ -13,8 +13,7 @@ import { CampaignDetailPage } from "./pages/CampaignDetailPage";
 import { DisparosPage } from "./pages/DisparosPage";
 import { DisparoNewPage } from "./pages/DisparoNewPage";
 import { DisparoSelectPage } from "./pages/DisparoSelectPage";
-import { ExtractionListPage } from "./pages/ExtractionListPage";
-import { ExtractionDetailPage } from "./pages/ExtractionDetailPage";
+import { ContactsPage } from "./pages/ContactsPage";
 import { FlowPage } from "./pages/FlowPage";
 import { ConnectPage } from "./pages/ConnectPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -66,8 +65,7 @@ export default function App() {
             <Route path="/disparos/nova" element={<DisparoNewPage />} />
             <Route path="/disparos/:id/selecionar" element={<DisparoSelectPage />} />
             <Route path="/disparos/:id" element={<CampaignDetailPage />} />
-            <Route path="/extracao" element={<ExtractionListPage />} />
-            <Route path="/extracao/:id" element={<ExtractionDetailPage />} />
+            <Route path="/contatos" element={<ContactsPage />} />
             <Route path="/configuracoes" element={<SettingsPage />} />
             <Route path="/administracao" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
             <Route path="/tutorial" element={<TutorialPage />} />
