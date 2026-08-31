@@ -80,6 +80,7 @@ model Campaign {
   weekStartDate        DateTime?
   maxLeads             Int        @default(1000)
   agentEnabled         Boolean    @default(true)
+  cadence              String     @default("[]")
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   userId               String?
@@ -131,6 +132,7 @@ model Lead {
   nextInviteAt     DateTime?
   currentBlockId   String?
   replyCount       Int       @default(0)
+  cadenceStep      Int       @default(0)
   errorCode        String?
   createdAt        DateTime  @default(now())
   conversations    Conversation[]
