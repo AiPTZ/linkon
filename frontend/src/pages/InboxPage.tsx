@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Inbox, MessageCircle, Send, Bot, UserCheck } from "lucide-react";
+import { Inbox, MessageCircle, Send, Bot, UserCheck, CalendarDays } from "lucide-react";
 import { api } from "../lib/api";
 import type { ConversationMessage, InboxListResponse } from "../types";
 import { formatDateTime, shortName } from "../lib/format";
@@ -198,6 +198,12 @@ export function InboxPage() {
                 </div>
                 <div className="truncate text-xs text-cream/45">{c.lead?.headline || (c.campaign ? c.campaign.name : `Agente nativo · ${c.account.username ?? "minha conta"}`)}</div>
                 <div className="mt-1 truncate text-xs text-cream/60">{c.lastMessage}</div>
+                {c.booking && (
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-gold-500/40 bg-gold-500/10 px-2 py-0.5 text-xs text-gold-400">
+                    <CalendarDays className="h-3 w-3" />
+                    Reunião: {formatDateTime(c.booking.startTime)}
+                  </span>
+                )}
               </div>
               <div className="flex flex-col items-end gap-1">
                 <span

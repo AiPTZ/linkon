@@ -12,6 +12,7 @@ interface InboxItem {
   account: { username: string | null };
   lastMessage: string | null;
   unread: number;
+  booking: { startTime: Date; meetLink: string | null } | null;
 }
 
 export async function listInbox(userId: string | null): Promise<{
@@ -26,6 +27,12 @@ export async function listInbox(userId: string | null): Promise<{
         lead: { select: { name: true, headline: true, profileUrl: true } },
         campaign: { select: { id: true, name: true, mode: true } },
         account: { select: { username: true } },
+        bookings: {
+          where: { status: "CONFIRMED" },
+          select: { startTime: true, meetLink: true },
+          orderBy: { startTime: "asc" },
+          take: 1,
+        },
       },
     }),
     prisma.conversation.count({ where: { account: { userId }, status: "NEEDS_HUMAN" } }),
@@ -50,6 +57,7 @@ export async function listInbox(userId: string | null): Promise<{
       account: c.account,
       lastMessage: last?.content ?? null,
       unread,
+      booking: c.bookings?.[0] ?? null,
     });
   }
   return { items, needsHuman };

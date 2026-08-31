@@ -357,6 +357,7 @@ export interface ConversationSummary {
   lead: { name: string | null; headline: string | null; profileUrl: string | null } | null;
   campaign: { id: string; name: string; mode: "SEARCH" | "SWEEP" | "DISPARO" } | null;
   account: { username: string | null };
+  booking: { startTime: string; meetLink: string | null } | null;
 }
 
 export interface InboxListResponse {
