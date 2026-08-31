@@ -79,6 +79,7 @@ function campaign(overrides: Partial<Campaign> = {}): Campaign {
     invitesSentWeek: 0,
     weekStartDate: null,
     maxLeads: 1000,
+    cadence: "[]",
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -169,6 +170,56 @@ describe("processBroadcastCampaign", () => {
       expect.objectContaining({ data: { status: "LIMIT_HIT" } }),
     );
     expect(notifyFn).not.toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_LIMIT_HIT" }));
+  });
+
+  it("agenda follow-up (COMPLETED em cadência) quando não há PENDING", async () => {
+    leadFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "L1", campaignId: "C1" } as Lead)
+      .mockResolvedValueOnce({ nextInviteAt: new Date(Date.now() - 60_000) });
+    leadCount.mockResolvedValue(0);
+    const c = campaign({
+      cadence: JSON.stringify([
+        { body: "c1", waitDays: 2 },
+        { body: "c2", waitDays: 2 },
+      ]),
+    });
+    await processBroadcastCampaign(c);
+    expect(sweepAdd).toHaveBeenCalledWith("sweep", { leadId: "L1", campaignId: "C1" }, expect.anything());
+  });
+
+  it("não completa a campanha enquanto houver follow-up aguardando", async () => {
+    leadFindFirst.mockResolvedValue(null);
+    leadCount.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    const c = campaign({
+      cadence: JSON.stringify([
+        { body: "c1", waitDays: 2 },
+        { body: "c2", waitDays: 2 },
+      ]),
+    });
+    await processBroadcastCampaign(c);
+    expect(campaignUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ data: { status: "COMPLETED" } }));
+  });
+
+  it("completa quando não há PENDING nem follow-ups restantes", async () => {
+    leadFindFirst.mockResolvedValue(null);
+    leadCount.mockResolvedValue(0);
+    const c = campaign({
+      cadence: JSON.stringify([
+        { body: "c1", waitDays: 2 },
+        { body: "c2", waitDays: 2 },
+      ]),
+    });
+    await processBroadcastCampaign(c);
+    expect(campaignUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "COMPLETED" } }));
+  });
+
+  it("não busca follow-up e completa normalmente em campanha sem cadência", async () => {
+    leadFindFirst.mockResolvedValue(null);
+    leadCount.mockResolvedValue(0);
+    await processBroadcastCampaign(campaign());
+    expect(sweepAdd).not.toHaveBeenCalled();
+    expect(campaignUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "COMPLETED" } }));
   });
 });
 

@@ -8,6 +8,7 @@ import { notify } from "./services/notification.service";
 import { refreshAgentCounters } from "./services/native-agent.service";
 import { logger } from "./utils/logger";
 import { randomDelayMs, isWorkHour } from "./utils/time";
+import { parseCadence } from "./utils/cadence";
 import type { Campaign } from "@prisma/client";
 
 export function startScheduler(): void {
@@ -253,6 +254,7 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
   const fresh = await refreshCounters(campaign);
   const now = new Date();
   const selectedFilter = campaign.mode === "DISPARO" ? { selected: true } : {};
+  const cadence = parseCadence(fresh.cadence);
 
   if (fresh.invitesSentWeek >= fresh.weeklyLimit) {
     await prisma.campaign.update({ where: { id: fresh.id }, data: { status: "LIMIT_HIT" } });
@@ -279,7 +281,7 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
   if (!isWorkHour(now, fresh.workStartHour, fresh.workEndHour)) {
     return;
   }
-  if (!String(fresh.inviteMessage ?? "").trim()) {
+  if (!String(fresh.inviteMessage ?? "").trim() && cadence.length === 0) {
     return;
   }
 
@@ -297,7 +299,7 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
     return;
   }
 
-  const due = await prisma.lead.findFirst({
+  const dueCopy1 = await prisma.lead.findFirst({
     where: {
       campaignId: fresh.id,
       status: "PENDING",
@@ -307,12 +309,39 @@ export async function processBroadcastCampaign(campaign: Campaign): Promise<void
     },
     orderBy: { createdAt: "asc" },
   });
+  let due = dueCopy1;
+  if (!due && cadence.length > 1) {
+    due = await prisma.lead.findFirst({
+      where: {
+        campaignId: fresh.id,
+        status: "COMPLETED",
+        currentBlockId: null,
+        ...selectedFilter,
+        cadenceStep: { lt: cadence.length },
+        nextInviteAt: { not: null, lte: now },
+      },
+      orderBy: { nextInviteAt: "asc" },
+    });
+  }
 
   if (!due) {
-    const remaining = await prisma.lead.count({
-      where: { campaignId: fresh.id, status: "PENDING", currentBlockId: null, ...selectedFilter },
-    });
-    if (remaining === 0) {
+    const [remainingCopy1, remainingFollowUps] = await Promise.all([
+      prisma.lead.count({
+        where: { campaignId: fresh.id, status: "PENDING", currentBlockId: null, ...selectedFilter },
+      }),
+      cadence.length > 1
+        ? prisma.lead.count({
+            where: {
+              campaignId: fresh.id,
+              status: "COMPLETED",
+              currentBlockId: null,
+              ...selectedFilter,
+              cadenceStep: { lt: cadence.length },
+            },
+          })
+        : Promise.resolve(0),
+    ]);
+    if (remainingCopy1 === 0 && remainingFollowUps === 0) {
       await prisma.campaign.update({ where: { id: fresh.id }, data: { status: "COMPLETED" } });
       await createLog({
         type: "CAMPAIGN_COMPLETED",
