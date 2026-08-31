@@ -228,6 +228,8 @@ model Conversation {
   accountId     String
   unipileChatId String                @unique
   status        String                @default("BOT")
+  note          String                @default("")
+  resolved      Boolean               @default(false)
   lastMessageAt DateTime              @default(now())
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
