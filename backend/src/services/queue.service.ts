@@ -6,7 +6,6 @@ export const chatbotQueue = new Queue("linkon-chatbot", { connection: redisConne
 export const searchQueue = new Queue("linkon-search", { connection: redisConnection });
 export const sweepQueue = new Queue("linkon-sweep", { connection: redisConnection });
 export const contactsQueue = new Queue("linkon-contacts", { connection: redisConnection });
-export const extractionQueue = new Queue("linkon-extraction", { connection: redisConnection });
 
 export interface InviteJob {
   leadId: string;
@@ -31,12 +30,12 @@ export interface SearchJob {
 }
 
 export interface ContactScrapeJob {
-  leadId: string;
-  campaignId: string;
+  leadId?: string;
+  campaignId?: string;
+  contactId?: string;
+  accountId?: string;
 }
 
-export interface ExtractionJob {
-  extractionId: string;
-  type: "run" | "scrape";
-  leadId?: string;
+export interface ContactsSyncJob {
+  accountId: string;
 }
