@@ -28,6 +28,9 @@ const agentUpdateSchema = z
     replyWeeklyLimit: z.number().int().min(1).max(10000).optional(),
     initialMessageMode: z.enum(["TEMPLATE", "AI"]).optional(),
     initialTemplate: z.string().max(2000).optional(),
+    schedulingEnabled: z.boolean().optional(),
+    meetingDurationMin: z.number().int().min(5).max(240).optional(),
+    meetingTitle: z.string().max(200).optional(),
   })
   .refine((body) => body.replyDelayMin === undefined || body.replyDelayMax === undefined || body.replyDelayMin <= body.replyDelayMax, {
     path: ["replyDelayMin"],
@@ -47,6 +50,9 @@ function toData(body: z.infer<typeof agentUpdateSchema>) {
     "replyWeeklyLimit",
     "initialMessageMode",
     "initialTemplate",
+    "schedulingEnabled",
+    "meetingDurationMin",
+    "meetingTitle",
   ] as const;
   for (const k of keys) {
     if (body[k] !== undefined) data[k] = body[k];
