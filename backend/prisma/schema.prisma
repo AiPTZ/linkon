@@ -28,7 +28,6 @@ model User {
   calendarConnection    CalendarConnection?
   sellerAvailability    SellerAvailability?
   bookings              Booking[]
-  extractions           Extraction[]
 }
 
 model Account {
@@ -52,7 +51,7 @@ model Account {
   nativeAgent          NativeAgent?
   campaigns            Campaign[]
   logs                 LogEvent[]
-  extractions          Extraction[]
+  contacts              Contact[]
   conversations        Conversation[]
   bookings            Booking[]
 }
@@ -141,32 +140,10 @@ model Lead {
   @@index([campaignId, status])
 }
 
-model Extraction {
-  id           String    @id @default(cuid())
-  name         String
-  searchUrl    String
-  accountId    String
-  account      Account   @relation(fields: [accountId], references: [id])
-  status       String    @default("PROCESSING")
-  maxResults   Int       @default(250)
-  totalFound   Int       @default(0)
-  processed    Int       @default(0)
-  withContact  Int       @default(0)
-  error        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  userId       String?
-  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  leads        ExtractedLead[]
-
-  @@index([accountId])
-  @@index([status])
-}
-
-model ExtractedLead {
+model Contact {
   id               String     @id @default(cuid())
-  extractionId     String
-  extraction       Extraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+  accountId        String
+  account          Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
   providerId       String
   publicIdentifier String?
   name             String?
@@ -179,8 +156,9 @@ model ExtractedLead {
   scrapedAt        DateTime?
   createdAt        DateTime   @default(now())
 
-  @@unique([extractionId, providerId])
-  @@index([extractionId])
+  @@unique([accountId, providerId])
+  @@index([accountId])
+  @@index([name])
 }
 
 model LogEvent {
