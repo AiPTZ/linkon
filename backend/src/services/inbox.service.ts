@@ -17,14 +17,19 @@ interface InboxItem {
   booking: { startTime: Date; meetLink: string | null } | null;
 }
 
-export async function listInbox(userId: string | null): Promise<{
-  items: InboxItem[];
-  needsHuman: number;
-}> {
-  const [conversations, needsHuman] = await Promise.all([
+export async function listInbox(
+  userId: string | null,
+  opts: { offset?: number; limit?: number } = {},
+): Promise<{ items: InboxItem[]; needsHuman: number; total: number; hasMore: boolean }> {
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
+  const where = { account: { userId } };
+  const [conversations, needsHuman, total] = await Promise.all([
     prisma.conversation.findMany({
-      where: { account: { userId } },
+      where,
       orderBy: [{ status: "asc" }, { lastMessageAt: "desc" }],
+      skip: offset,
+      take: limit,
       include: {
         lead: { select: { name: true, headline: true, profileUrl: true } },
         campaign: { select: { id: true, name: true, mode: true } },
@@ -38,13 +43,15 @@ export async function listInbox(userId: string | null): Promise<{
       },
     }),
     prisma.conversation.count({ where: { account: { userId }, status: "NEEDS_HUMAN" } }),
+    prisma.conversation.count({ where }),
   ]);
 
   const items: InboxItem[] = [];
   for (const c of conversations) {
     items.push(await itemFromRow(c));
   }
-  return { items, needsHuman };
+  const hasMore = offset + items.length < total;
+  return { items, needsHuman, total, hasMore };
 }
 
 async function itemFromRow(c: {
@@ -90,12 +97,31 @@ async function assertAccess(conversationId: string, userId: string | null) {
   return conv;
 }
 
-export async function listMessages(conversationId: string, userId: string | null): Promise<ConversationMessage[]> {
+export async function listMessages(
+  conversationId: string,
+  userId: string | null,
+  opts: { cursor?: string; limit?: number } = {},
+): Promise<{ items: ConversationMessage[]; nextCursor: string | null }> {
   await assertAccess(conversationId, userId);
-  return prisma.conversationMessage.findMany({
-    where: { conversationId },
-    orderBy: { createdAt: "asc" },
-  });
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
+  const where = { conversationId };
+  const orderBy = [{ createdAt: "desc" as const }, { id: "desc" as const }];
+  let rows: ConversationMessage[];
+  if (opts.cursor) {
+    rows = await prisma.conversationMessage.findMany({
+      where,
+      orderBy,
+      cursor: { id: opts.cursor },
+      skip: 1,
+      take: limit,
+    });
+  } else {
+    rows = await prisma.conversationMessage.findMany({ where, orderBy, take: limit });
+  }
+  rows.reverse();
+  const total = await prisma.conversationMessage.count({ where: { conversationId } });
+  const hasMore = opts.cursor ? rows.length === limit : total > limit;
+  return { items: rows, nextCursor: hasMore && rows.length > 0 ? rows[0].id : null };
 }
 
 export async function sendHumanMessage(

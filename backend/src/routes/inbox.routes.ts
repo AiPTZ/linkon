@@ -10,7 +10,14 @@ inboxRouter.get(
   "/",
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
-    res.json(await listInbox(userId));
+    const offset = Number(req.query.offset ?? 0);
+    const limit = Number(req.query.limit ?? 50);
+    res.json(
+      await listInbox(userId, {
+        offset: Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0,
+        limit: Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 50,
+      }),
+    );
   }),
 );
 
@@ -18,7 +25,14 @@ inboxRouter.get(
   "/:id/messages",
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
-    res.json({ items: await listMessages(req.params.id, userId) });
+    const cursor = typeof req.query.cursor === "string" && req.query.cursor ? req.query.cursor : undefined;
+    const limit = Number(req.query.limit ?? 50);
+    res.json(
+      await listMessages(req.params.id, userId, {
+        cursor,
+        limit: Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 50,
+      }),
+    );
   }),
 );
 

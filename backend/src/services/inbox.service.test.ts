@@ -11,7 +11,7 @@ vi.mock("./unipile.service", () => ({ unipile: { sendChatMessage: vi.fn() } }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { listInbox, sendHumanMessage, claimConversation, reactivateConversation, markConversationRead, updateConversation } from "./inbox.service";
+import { listInbox, listMessages, sendHumanMessage, claimConversation, reactivateConversation, markConversationRead, updateConversation } from "./inbox.service";
 import { ApiError } from "../utils/errors";
 
 beforeEach(() => vi.clearAllMocks());
@@ -133,5 +133,70 @@ describe("updateConversation", () => {
   it("lança 404 quando a conversa não é do usuário", async () => {
     (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     await expect(updateConversation("CV1", "U1", { note: "x" })).rejects.toThrow(ApiError);
+  });
+});
+
+describe("listInbox paginação", () => {
+  it("aplica offset/limit e calcula hasMore", async () => {
+    const row = {
+      id: "CV1", status: "NEEDS_HUMAN", note: "", resolved: false, lastMessageAt: new Date(),
+      lead: { name: "João", headline: "CEO", profileUrl: null },
+      campaign: { id: "C1", name: "Tech", mode: "DISPARO" },
+      account: { username: "acme" },
+      bookings: [],
+      updatedAt: new Date(),
+    };
+    (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([row]);
+    (prisma.conversation.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(1).mockResolvedValueOnce(5);
+    (prisma.conversationMessage.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ content: "oi", role: "LEAD" });
+    (prisma.conversationMessage.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+    const res = await listInbox("U1", { offset: 0, limit: 50 });
+    expect(res.total).toBe(5);
+    expect(res.hasMore).toBe(true);
+    const arg = (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(arg.skip).toBe(0);
+    expect(arg.take).toBe(50);
+  });
+
+  it("retorna hasMore false quando offset+items >= total", async () => {
+    (prisma.conversation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "CV1", status: "BOT", note: "", resolved: false, lastMessageAt: new Date(), lead: { name: null, headline: null, profileUrl: null }, campaign: null, account: { username: null }, bookings: [], updatedAt: new Date() },
+    ]);
+    (prisma.conversation.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    (prisma.conversationMessage.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ content: "oi", role: "LEAD" });
+    (prisma.conversationMessage.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+    const res = await listInbox("U1", { offset: 0, limit: 50 });
+    expect(res.hasMore).toBe(false);
+  });
+});
+
+describe("listMessages", () => {
+  it("retorna as mais recentes sem cursor e nextCursor quando há mais", async () => {
+    (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CV1", accountId: "A1" });
+    (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "M2", conversationId: "CV1", role: "BOT", content: "olá", messageId: "x", tokensIn: 1, tokensOut: 1, costUsd: 0, createdAt: new Date("2026-09-01T10:01:00Z") },
+      { id: "M1", conversationId: "CV1", role: "LEAD", content: "oi", messageId: null, tokensIn: null, tokensOut: null, costUsd: null, createdAt: new Date("2026-09-01T10:00:00Z") },
+    ]);
+    (prisma.conversationMessage.count as ReturnType<typeof vi.fn>).mockResolvedValue(5);
+    const res = await listMessages("CV1", "U1", { limit: 2 });
+    expect(res.items.map((m) => m.id)).toEqual(["M1", "M2"]);
+    expect(res.nextCursor).toBe("M1");
+    const arg = (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(arg.skip).toBeUndefined();
+    expect(arg.take).toBe(2);
+  });
+
+  it("usa cursor e skip 1 em páginas seguintes e encerra no fim", async () => {
+    (prisma.conversation.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CV1", accountId: "A1" });
+    (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "M3", conversationId: "CV1", role: "LEAD", content: "mais antiga", messageId: null, tokensIn: null, tokensOut: null, costUsd: null, createdAt: new Date("2026-09-01T09:59:00Z") },
+    ]);
+    (prisma.conversationMessage.count as ReturnType<typeof vi.fn>).mockResolvedValue(3);
+    const res = await listMessages("CV1", "U1", { cursor: "M1", limit: 2 });
+    expect(res.items.map((m) => m.id)).toEqual(["M3"]);
+    expect(res.nextCursor).toBeNull();
+    const arg = (prisma.conversationMessage.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(arg.cursor).toEqual({ id: "M1" });
+    expect(arg.skip).toBe(1);
   });
 });
