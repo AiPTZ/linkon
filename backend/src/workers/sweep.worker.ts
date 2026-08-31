@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { prisma } from "../lib/prisma";
 import { redisConnection } from "../lib/redis";
 import { refreshCounters, withinLimits } from "../services/invite.service";
-import { sendSweepMessage } from "../services/sweep.service";
+import { sendSweepMessage, isEligibleForSweep } from "../services/sweep.service";
 import { createLog } from "../services/log.service";
 import { logger } from "../utils/logger";
 import { UnipileError } from "../utils/errors";
@@ -30,7 +30,7 @@ const worker = new Worker(
     }
 
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!lead || lead.status !== "PENDING" || lead.currentBlockId !== null) {
+    if (!lead || !isEligibleForSweep(lead, fresh)) {
       return;
     }
     if (campaign.mode === "DISPARO" && !lead.selected) {

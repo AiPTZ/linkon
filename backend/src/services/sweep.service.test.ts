@@ -33,11 +33,13 @@ import {
   importLeadsFromSweep,
   previewRelations,
   sendSweepMessage,
+  isEligibleForSweep,
 } from "./sweep.service";
 import { UnipileError } from "../utils/errors";
 import type { Campaign, Lead, Account } from "@prisma/client";
 
 const leadUpsert = prisma.lead.upsert as ReturnType<typeof vi.fn>;
+const leadUpdate = prisma.lead.update as ReturnType<typeof vi.fn>;
 const campaignUpdate = prisma.campaign.update as ReturnType<typeof vi.fn>;
 const accountFind = prisma.account.findUnique as ReturnType<typeof vi.fn>;
 const notifyFn = notify as ReturnType<typeof vi.fn>;
@@ -63,6 +65,7 @@ function campaign(overrides: Partial<Campaign> = {}): Campaign {
     invitesSentWeek: 0,
     weekStartDate: null,
     maxLeads: 1000,
+    cadence: "[]",
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -86,6 +89,7 @@ function lead(overrides: Partial<Lead> = {}): Lead {
     nextInviteAt: null,
     currentBlockId: null,
     replyCount: 0,
+    cadenceStep: 0,
     errorCode: null,
     createdAt: new Date(),
     ...overrides,
@@ -255,5 +259,101 @@ describe("sendSweepMessage", () => {
     ).rejects.toThrow("limit");
 
     expect(notifyFn).toHaveBeenCalledWith(expect.objectContaining({ type: "BROADCAST_LIMIT_HIT" }));
+  });
+});
+
+describe("sendSweepMessage com cadência", () => {
+  const cadenceCampaign = (cadence: unknown) =>
+    campaign({
+      mode: "DISPARO",
+      searchUrl: "DISPARO",
+      cadence: JSON.stringify(cadence),
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    accountFind.mockResolvedValue(account);
+    (unipile.sendDirectMessage as ReturnType<typeof vi.fn>).mockResolvedValue({ chat_id: "chat1" });
+  });
+
+  it("usa cadence[step] com placeholders e incrementa cadenceStep", async () => {
+    await sendSweepMessage(
+      cadenceCampaign([
+        { body: "Oi {nome}", waitDays: 3 },
+        { body: "Ainda {nome}?", waitDays: 5 },
+      ]),
+      lead({ status: "PENDING", cadenceStep: 0 }),
+    );
+
+    expect(unipile.sendDirectMessage).toHaveBeenCalledWith("UA1", "ACoAAmember1", "Oi João Silva");
+    const update = leadUpdate.mock.calls[0][0] as {
+      data: { cadenceStep: number; nextInviteAt: Date };
+    };
+    expect(update.data.cadenceStep).toBe(1);
+    const next = update.data.nextInviteAt.getTime();
+    expect(next).toBeGreaterThan(Date.now() + 3 * 86_400_000 - 60_000);
+    expect(next).toBeLessThan(Date.now() + 3 * 86_400_000 + 60_000);
+  });
+
+  it("não agenda próxima cópia na última mensagem da cadência", async () => {
+    await sendSweepMessage(
+      cadenceCampaign([{ body: "c1", waitDays: 2 }]),
+      lead({ status: "PENDING", cadenceStep: 0 }),
+    );
+
+    const update = leadUpdate.mock.calls[0][0] as {
+      data: { cadenceStep: number; nextInviteAt: Date | null };
+    };
+    expect(update.data.cadenceStep).toBe(1);
+    expect(update.data.nextInviteAt).toBeNull();
+  });
+
+  it("envia a cópia do passo atual para lead COMPLETED em cadência", async () => {
+    await sendSweepMessage(
+      cadenceCampaign([
+        { body: "c1", waitDays: 2 },
+        { body: "c2", waitDays: 4 },
+      ]),
+      lead({ status: "COMPLETED", cadenceStep: 1 }),
+    );
+
+    expect(unipile.sendDirectMessage).toHaveBeenCalledWith("UA1", "ACoAAmember1", "c2");
+    const update = leadUpdate.mock.calls[0][0] as {
+      data: { cadenceStep: number };
+    };
+    expect(update.data.cadenceStep).toBe(2);
+  });
+});
+
+describe("isEligibleForSweep", () => {
+  const twoCopy = campaign({
+    cadence: JSON.stringify([
+      { body: "c1", waitDays: 2 },
+      { body: "c2", waitDays: 2 },
+    ]),
+  });
+
+  it("aceita lead PENDING (cópia 1)", () => {
+    expect(isEligibleForSweep(lead({ status: "PENDING" }), campaign())).toBe(true);
+  });
+
+  it("rejeita lead RESPONDED", () => {
+    expect(isEligibleForSweep(lead({ status: "RESPONDED" }), campaign())).toBe(false);
+  });
+
+  it("rejeita lead COMPLETED sem cadência", () => {
+    expect(isEligibleForSweep(lead({ status: "COMPLETED", cadenceStep: 1 }), campaign())).toBe(false);
+  });
+
+  it("aceita lead COMPLETED em cadência com passo restante", () => {
+    expect(isEligibleForSweep(lead({ status: "COMPLETED", cadenceStep: 1 }), twoCopy)).toBe(true);
+  });
+
+  it("rejeita lead COMPLETED no fim da cadência", () => {
+    expect(isEligibleForSweep(lead({ status: "COMPLETED", cadenceStep: 2 }), twoCopy)).toBe(false);
+  });
+
+  it("rejeita lead com currentBlockId", () => {
+    expect(isEligibleForSweep(lead({ status: "PENDING", currentBlockId: "B1" }), campaign())).toBe(false);
   });
 });

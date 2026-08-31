@@ -5,6 +5,8 @@ import { notify } from "./notification.service";
 import { resolveInitialMessage } from "./chatbot-ai.service";
 import { sleep, randomInt } from "../utils/time";
 import { UnipileError } from "../utils/errors";
+import { applyPlaceholders } from "../utils/personalize";
+import { parseCadence } from "../utils/cadence";
 import type { Campaign, Lead } from "@prisma/client";
 
 export interface ImportResult {
@@ -97,22 +99,50 @@ export async function previewRelations(accountId: string, cap = 5000): Promise<R
   return { total, capped, sample };
 }
 
+export function isEligibleForSweep(lead: Lead, campaign: Campaign): boolean {
+  if (lead.currentBlockId !== null) return false;
+  if (lead.status === "PENDING") return true;
+  if (lead.status === "COMPLETED") {
+    const cadence = parseCadence(campaign.cadence);
+    return cadence.length > 1 && lead.cadenceStep > 0 && lead.cadenceStep < cadence.length;
+  }
+  return false;
+}
+
 export async function sendSweepMessage(campaign: Campaign, lead: Lead): Promise<void> {
   const account = await prisma.account.findUnique({ where: { id: campaign.accountId } });
   if (!account) {
     throw new Error(`Account ${campaign.accountId} nao encontrada`);
   }
 
-  const text = (await resolveInitialMessage(campaign, lead)).trim();
+  const cadence = parseCadence(campaign.cadence);
+  const rawText =
+    cadence.length > 0
+      ? cadence[Math.min(lead.cadenceStep, cadence.length - 1)].body
+      : await resolveInitialMessage(campaign, lead);
+  const text = applyPlaceholders(rawText, lead).trim();
   if (!text) {
     throw new Error("Mensagem de varredura vazia");
   }
 
   try {
     const res = await unipile.sendDirectMessage(account.unipileAccountId, lead.providerId, text);
+    const now = new Date();
+    const updateData: { status: "COMPLETED"; lastMessageAt: Date; cadenceStep?: number; nextInviteAt?: Date | null } = {
+      status: "COMPLETED",
+      lastMessageAt: now,
+    };
+    if (cadence.length > 0) {
+      const nextStep = lead.cadenceStep + 1;
+      updateData.cadenceStep = nextStep;
+      updateData.nextInviteAt =
+        nextStep < cadence.length
+          ? new Date(now.getTime() + cadence[lead.cadenceStep].waitDays * 86_400_000)
+          : null;
+    }
     await prisma.lead.update({
       where: { id: lead.id },
-      data: { status: "COMPLETED", lastMessageAt: new Date() },
+      data: updateData,
     });
     await prisma.campaign.update({
       where: { id: campaign.id },
