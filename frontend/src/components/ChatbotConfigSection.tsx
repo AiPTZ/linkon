@@ -31,6 +31,9 @@ export function defaultAgentConfig(): AgentConfig {
     replyWeeklyLimit: 400,
     initialMessageMode: "TEMPLATE",
     initialTemplate: "",
+    schedulingEnabled: false,
+    meetingDurationMin: 30,
+    meetingTitle: "",
   };
 }
 
@@ -52,6 +55,9 @@ export function sanitizeAgentConfig(cfg: AgentConfig): AgentConfig {
     maxTurns: floor(cfg.maxTurns, 1, 6),
     replyDailyLimit: floor(cfg.replyDailyLimit, 1, 100),
     replyWeeklyLimit: floor(cfg.replyWeeklyLimit, 1, 400),
+    schedulingEnabled: cfg.schedulingEnabled === true,
+    meetingDurationMin: floor(cfg.meetingDurationMin, 5, 30),
+    meetingTitle: typeof cfg.meetingTitle === "string" ? cfg.meetingTitle : "",
   };
 }
 
@@ -408,6 +414,52 @@ export function AgentConfigSection({ value, onChange, title = "Agente nativo" }:
                     A IA escreve uma mensagem personalizada com base no perfil do lead e na base de
                     conhecimento. Se falhar, usa a mensagem de convite como fallback.
                   </p>
+                )}
+              </div>
+
+              <div className="space-y-3 border-t border-ink-400 pt-4">
+                <span className="label !mb-0">Agendamento de reuniões</span>
+                <label className="flex items-center gap-2 text-sm text-cream/70">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-gold-500"
+                    checked={value.schedulingEnabled}
+                    onChange={(e) => update({ schedulingEnabled: e.target.checked })}
+                  />
+                  Permitir que a IA ofereça horários e marque reuniões no Google Agenda
+                </label>
+                {value.schedulingEnabled && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="meetingDurationMin" className="label">
+                        Duração da reunião (min)
+                      </label>
+                      <select
+                        id="meetingDurationMin"
+                        className="input"
+                        value={value.meetingDurationMin}
+                        onChange={(e) => update({ meetingDurationMin: Number(e.target.value) })}
+                      >
+                        <option value={15}>15</option>
+                        <option value={30}>30</option>
+                        <option value={45}>45</option>
+                        <option value={60}>60</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="meetingTitle" className="label">
+                        Título do evento
+                      </label>
+                      <input
+                        id="meetingTitle"
+                        className="input"
+                        maxLength={200}
+                        placeholder="Reunião {produto} com {leadName}"
+                        value={value.meetingTitle}
+                        onChange={(e) => update({ meetingTitle: e.target.value })}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </>

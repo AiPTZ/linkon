@@ -121,6 +121,9 @@ export interface NativeAgent {
   replyWeeklyLimit: number;
   initialMessageMode: InitialMessageMode;
   initialTemplate: string;
+  schedulingEnabled: boolean;
+  meetingDurationMin: number;
+  meetingTitle: string;
 }
 
 export interface AgentConfig {
@@ -135,6 +138,9 @@ export interface AgentConfig {
   replyWeeklyLimit: number;
   initialMessageMode: InitialMessageMode;
   initialTemplate: string;
+  schedulingEnabled: boolean;
+  meetingDurationMin: number;
+  meetingTitle: string;
 }
 
 export interface AgentPayload {
@@ -149,6 +155,9 @@ export interface AgentPayload {
   replyWeeklyLimit?: number;
   initialMessageMode?: InitialMessageMode;
   initialTemplate?: string;
+  schedulingEnabled?: boolean;
+  meetingDurationMin?: number;
+  meetingTitle?: string;
 }
 
 export interface AgentAccountListItem {

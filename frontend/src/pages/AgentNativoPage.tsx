@@ -42,6 +42,9 @@ export function AgentNativoPage() {
                   replyWeeklyLimit: item.agent.replyWeeklyLimit,
                   initialMessageMode: item.agent.initialMessageMode,
                   initialTemplate: item.agent.initialTemplate,
+                  schedulingEnabled: item.agent.schedulingEnabled,
+                  meetingDurationMin: item.agent.meetingDurationMin,
+                  meetingTitle: item.agent.meetingTitle,
                 }
               : defaultAgentConfig(),
             saving: false,
@@ -83,6 +86,9 @@ export function AgentNativoPage() {
                   replyWeeklyLimit: agent.replyWeeklyLimit,
                   initialMessageMode: agent.initialMessageMode,
                   initialTemplate: agent.initialTemplate,
+                  schedulingEnabled: agent.schedulingEnabled,
+                  meetingDurationMin: agent.meetingDurationMin,
+                  meetingTitle: agent.meetingTitle,
                 },
               }
             : r,
