@@ -354,6 +354,8 @@ export interface ConversationSummary {
   lastMessageAt: string;
   lastMessage: string | null;
   unread: number;
+  note: string;
+  resolved: boolean;
   lead: { name: string | null; headline: string | null; profileUrl: string | null } | null;
   campaign: { id: string; name: string; mode: "SEARCH" | "SWEEP" | "DISPARO" } | null;
   account: { username: string | null };
@@ -363,6 +365,8 @@ export interface ConversationSummary {
 export interface InboxListResponse {
   items: ConversationSummary[];
   needsHuman: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface ConversationMessage {
@@ -375,4 +379,14 @@ export interface ConversationMessage {
   tokensOut: number | null;
   costUsd: number | null;
   createdAt: string;
+}
+
+export interface MessagePage {
+  items: ConversationMessage[];
+  nextCursor: string | null;
+}
+
+export interface SuggestReplyResponse {
+  reply: string;
+  costUsd: number;
 }
