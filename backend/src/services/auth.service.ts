@@ -12,12 +12,20 @@ export interface NativeAuthResult {
   localAccountId?: string;
 }
 
+export async function assertCanConnectLinkedIn(userId: string): Promise<void> {
+  const owned = await prisma.account.count({
+    where: { userId, status: { not: "REJECTED" } },
+  });
+  if (owned > 0) throw new ApiError(409, "Limite de 1 conta LinkedIn por usuário atingido");
+}
+
 export async function connectNative(
   username: string,
   password: string,
   country?: string,
   userId?: string | null,
 ): Promise<NativeAuthResult> {
+  if (userId) await assertCanConnectLinkedIn(userId);
   const result = await unipile.connectLinkedinNative(username, password, country);
 
   if (result.checkpoint && result.account_id) {
@@ -94,13 +102,18 @@ export async function confirmHosted(
   const matched = items.filter((a) => typeof a.name === "string" && a.name.startsWith(prefix));
   let created = 0;
   for (const acc of matched) {
-    if (userId) {
-      const owned = await prisma.account.count({
-        where: { userId, status: { not: "REJECTED" } },
-      });
-      if (owned > 0) continue;
-    }
     const status = opts.pending ? "PENDING_LINKEDIN" : "OK";
+    if (userId) {
+      const existing = await prisma.account.findUnique({ where: { unipileAccountId: acc.id } });
+      if (existing && existing.userId === userId) {
+        await prisma.account.update({
+          where: { id: existing.id },
+          data: { status, username: acc.name },
+        });
+        continue;
+      }
+      await assertCanConnectLinkedIn(userId);
+    }
     await prisma.account.upsert({
       where: { unipileAccountId: acc.id },
       update: { status, username: acc.name, userId: userId ?? null },

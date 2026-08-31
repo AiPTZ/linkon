@@ -9,14 +9,30 @@ vi.mock("../lib/prisma", () => ({
 }));
 
 vi.mock("./unipile.service", () => ({
-  unipile: { deleteAccount: vi.fn(), listAccounts: vi.fn(), createHostedAuthLink: vi.fn() },
+  unipile: {
+    deleteAccount: vi.fn(),
+    listAccounts: vi.fn(),
+    createHostedAuthLink: vi.fn(),
+    connectLinkedinNative: vi.fn(),
+  },
+}));
+
+vi.mock("../utils/crypto", () => ({
+  encrypt: (v: string) => v,
+  decrypt: (v: string) => v,
 }));
 
 vi.mock("./log.service", () => ({ createLog: vi.fn() }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { disconnectAccount, confirmHosted, syncAccounts } from "./auth.service";
+import {
+  disconnectAccount,
+  confirmHosted,
+  syncAccounts,
+  connectNative,
+  assertCanConnectLinkedIn,
+} from "./auth.service";
 import { ApiError } from "../utils/errors";
 import type { Account } from "@prisma/client";
 
@@ -28,6 +44,7 @@ const campaignUpdateMany = prisma.campaign.updateMany as ReturnType<typeof vi.fn
 const transaction = prisma.$transaction as ReturnType<typeof vi.fn>;
 const deleteAccount = unipile.deleteAccount as ReturnType<typeof vi.fn>;
 const listAccounts = unipile.listAccounts as ReturnType<typeof vi.fn>;
+const connectLinkedinNative = unipile.connectLinkedinNative as ReturnType<typeof vi.fn>;
 
 const account: Account = {
   id: "A1",
@@ -42,13 +59,16 @@ const account: Account = {
   updatedAt: new Date(),
 } as Account;
 
-describe("disconnectAccount", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    accountFind.mockResolvedValue(account);
-    transaction.mockImplementation((ops: unknown[]) => Promise.all(ops));
-  });
+beforeEach(() => {
+  vi.clearAllMocks();
+  accountUpsert.mockResolvedValue({ id: "A1" });
+  accountCount.mockResolvedValue(0);
+  accountFind.mockResolvedValue(account);
+  accountUpdate.mockResolvedValue({ id: "A1" });
+  transaction.mockImplementation((ops: unknown[]) => Promise.all(ops));
+});
 
+describe("disconnectAccount", () => {
   it("desconecta na Unipile e marca a conta local como DISCONNECTED", async () => {
     await disconnectAccount("A1");
 
@@ -82,15 +102,23 @@ describe("disconnectAccount", () => {
   });
 });
 
-describe("confirmHosted", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    accountUpsert.mockResolvedValue({ id: "A1" });
+describe("assertCanConnectLinkedIn", () => {
+  it("permite quando o usuário não possui contas", async () => {
     accountCount.mockResolvedValue(0);
+    await expect(assertCanConnectLinkedIn("U1")).resolves.toBeUndefined();
   });
 
-  it("cria conta PENDING_LINKEDIN para usuário", async () => {
-    listAccounts.mockResolvedValue({ items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }] });
+  it("bloqueia com 409 quando o usuário já possui uma conta não-rejeitada", async () => {
+    accountCount.mockResolvedValue(1);
+    await expect(assertCanConnectLinkedIn("U1")).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("confirmHosted", () => {
+  it("cria conta PENDING_LINKEDIN para usuário sem contas", async () => {
+    listAccounts.mockResolvedValue({
+      items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }],
+    });
     const res = await confirmHosted("U1", { pending: true });
     expect(res.accounts).toBe(1);
     const create = accountUpsert.mock.calls[0][0] as { create: { status: string; userId: string } };
@@ -98,11 +126,25 @@ describe("confirmHosted", () => {
     expect(create.create.userId).toBe("U1");
   });
 
-  it("não cria segunda conta para usuário que já possui uma", async () => {
+  it("bloqueia segunda conta de usuário que já possui uma não-rejeitada", async () => {
     accountCount.mockResolvedValue(1);
-    listAccounts.mockResolvedValue({ items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }] });
+    listAccounts.mockResolvedValue({
+      items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }],
+    });
+    await expect(confirmHosted("U1", { pending: true })).rejects.toMatchObject({ status: 409 });
+    expect(accountUpsert).not.toHaveBeenCalled();
+  });
+
+  it("reconfirmação da mesma conta do usuário é idempotente (sem 409)", async () => {
+    accountFind.mockResolvedValue({ id: "A1", unipileAccountId: "UA1", userId: "U1" });
+    accountCount.mockResolvedValue(1);
+    listAccounts.mockResolvedValue({
+      items: [{ id: "UA1", name: "linkon-connect-U1-1700000000000" }],
+    });
     const res = await confirmHosted("U1", { pending: true });
     expect(res.accounts).toBe(0);
+    const update = accountUpdate.mock.calls[0][0] as { data: { status: string } };
+    expect(update.data.status).toBe("PENDING_LINKEDIN");
     expect(accountUpsert).not.toHaveBeenCalled();
   });
 
@@ -111,6 +153,28 @@ describe("confirmHosted", () => {
     const res = await confirmHosted("U1", { pending: true });
     expect(res.accounts).toBe(0);
     expect(accountUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("connectNative", () => {
+  it("bloqueia com 409 quando userId é fornecido e o usuário já possui conta", async () => {
+    accountCount.mockResolvedValue(1);
+    await expect(connectNative("user", "pass", undefined, "U1")).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(connectLinkedinNative).not.toHaveBeenCalled();
+  });
+
+  it("não verifica limite quando userId não é fornecido", async () => {
+    connectLinkedinNative.mockResolvedValue({
+      account_id: "UA1",
+      provider_id: "P1",
+      first_name: "F",
+    });
+    const res = await connectNative("user", "pass", undefined, null);
+    expect(accountCount).not.toHaveBeenCalled();
+    expect(res.localAccountId).toBe("A1");
+    expect(accountUpsert).toHaveBeenCalled();
   });
 });
 
