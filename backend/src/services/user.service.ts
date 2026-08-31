@@ -117,8 +117,8 @@ export function verifyToken(token: string): AuthPayload {
   return jwt.verify(token, env.AUTH_SECRET) as AuthPayload;
 }
 
-export async function listUsers(): Promise<(PublicUser & { whatsapp: string | null; status: string; createdAt: Date; _count: { accounts: number; campaigns: number; extractions: number } })[]> {
-  return prisma.user.findMany({
+export async function listUsers(): Promise<(PublicUser & { whatsapp: string | null; status: string; createdAt: Date; _count: { accounts: number; campaigns: number; contacts: number } })[]> {
+  const users = await prisma.user.findMany({
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
@@ -128,9 +128,24 @@ export async function listUsers(): Promise<(PublicUser & { whatsapp: string | nu
       status: true,
       whatsapp: true,
       createdAt: true,
-      _count: { select: { accounts: true, campaigns: true, extractions: true } },
+      _count: { select: { accounts: true, campaigns: true } },
     },
   });
+
+  const accountRows = await prisma.account.findMany({
+    where: { userId: { not: null } },
+    select: { userId: true, _count: { select: { contacts: true } } },
+  });
+  const contactsByUser = new Map<string, number>();
+  for (const a of accountRows) {
+    const userId = a.userId as string;
+    contactsByUser.set(userId, (contactsByUser.get(userId) ?? 0) + a._count.contacts);
+  }
+
+  return users.map((u) => ({
+    ...u,
+    _count: { ...u._count, contacts: contactsByUser.get(u.id) ?? 0 },
+  }));
 }
 
 export async function approveUser(id: string): Promise<void> {

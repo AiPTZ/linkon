@@ -205,11 +205,11 @@ adminRouter.post(
 adminRouter.get(
   "/global",
   ah(async (_req, res) => {
-    const [campaigns, extractions] = await Promise.all([
+    const [campaigns, contacts] = await Promise.all([
       prisma.campaign.count({ where: { userId: null } }),
-      prisma.extraction.count({ where: { userId: null } }),
+      prisma.contact.count({ where: { account: { userId: null } } }),
     ]);
-    res.json({ campaigns, extractions });
+    res.json({ campaigns, contacts });
   }),
 );
 
