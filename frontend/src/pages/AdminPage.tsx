@@ -443,7 +443,7 @@ export function AdminPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-cream/70">
                         {u._count?.accounts ?? 0} contas · {u._count?.campaigns ?? 0} campanhas ·{" "}
-                        {u._count?.extractions ?? 0} extrações
+                        {u._count?.contacts ?? 0} contatos
                       </td>
                       <td className="px-4 py-3 text-cream/70">{formatDateTime(u.createdAt)}</td>
                       <td className="px-4 py-3">
