@@ -2,15 +2,30 @@ import { Worker } from "bullmq";
 import { prisma } from "../lib/prisma";
 import { redisConnection } from "../lib/redis";
 import { scrapeLeadContact } from "../services/contacts.service";
+import { syncAccountNetwork, scrapeContactById } from "../services/network.service";
 import { createLog } from "../services/log.service";
 import { logger } from "../utils/logger";
 import { UnipileError } from "../utils/errors";
-import type { ContactScrapeJob } from "../services/queue.service";
+import type { ContactsSyncJob, ContactScrapeJob } from "../services/queue.service";
 
 const worker = new Worker(
   "linkon-contacts",
   async (job) => {
-    const { leadId, campaignId } = job.data as ContactScrapeJob;
+    if (job.name === "sync-network") {
+      const { accountId } = job.data as ContactsSyncJob;
+      await syncAccountNetwork(accountId);
+      return;
+    }
+
+    const data = job.data as ContactScrapeJob;
+
+    if (data.contactId) {
+      await scrapeContactById(data.contactId);
+      return;
+    }
+
+    const { leadId, campaignId } = data;
+    if (!leadId || !campaignId) return;
 
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
