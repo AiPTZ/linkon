@@ -272,6 +272,8 @@ O `calendar.service` usa `fetch` (sem dependência Google) e guarda o refresh to
 (AES-256-GCM) no `CalendarConnection`. `createEventRobust` refaz o request após `401` (refresh) e faz
 backoff em `429`/`5xx`. Testes mockam o fetch globalmente (`vi.stubGlobal`).
 
+- 7.12 Inbox paginado: o frontend pausa o polling de 8s da lista/histórico enquanto `nextCursor` está ativo (evita colapsar a janela carregada). `POST /suggest-reply` exige `USER_LLM_API_KEY`; sem ela retorna 502 (o botão mostra toast).
+
 ---
 
 ## 8. Testes

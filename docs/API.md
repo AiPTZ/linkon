@@ -100,6 +100,16 @@ Convenções:
 
 `PUT /api/agents/:accountId` agora aceita `schedulingEnabled`, `meetingDurationMin`, `meetingTitle`.
 
+### Inbox (atendimento humano)
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `GET /api/inbox?offset=&limit=` | Lista conversas paginada. Retorna `{ items, needsHuman, total, hasMore }`. |
+| `GET /api/inbox/:id/messages?cursor=&limit=` | Histórico paginado. Retorna `{ items, nextCursor }` (ascendente). |
+| `POST /api/inbox/:id/read` | 204. Marca como lida (zera unread). |
+| `PATCH /api/inbox/:id` | Body `{ note?, resolved? }`. Atualiza nota interna/status resolvida. |
+| `POST /api/inbox/:id/suggest-reply` | Body `{ text? }`. Gera rascunho de resposta do vendedor com a base do agente. 502 em falha do LLM. |
+
 ## Detalhes
 
 ### GET /health
@@ -326,6 +336,33 @@ Resposta `{ "ok": true }`.
 ### POST /notifications/:id/read
 
 `404` se não existir. Resposta `{ "ok": true }`.
+
+### GET /api/inbox
+
+Query: `offset` (base 0, padrão 0), `limit` (1-100, padrão 50). Resposta:
+`{ "items", "needsHuman", "total", "hasMore" }`. Ordena por status + `lastMessageAt` desc.
+`items[]` incluem `id`, `status`, `note`, `resolved`, `lastMessageAt`, `lead`, `campaign`, `account`,
+`lastMessage`, `unread` (mensagens LEAD com `createdAt > updatedAt`) e `booking` (próximo CONFIRMED).
+
+### GET /api/inbox/:id/messages
+
+Query: `cursor` (id da mensagem), `limit` (1-100, padrão 50). Resposta: `{ "items", "nextCursor" }`
+ascendente (as mais recentes primeiro por cursor). `nextCursor` é `null` quando não há mais páginas.
+
+### POST /api/inbox/:id/read
+
+Resposta `204` sem corpo. Seta `conversation.updatedAt` para agora (zera o `unread`).
+
+### PATCH /api/inbox/:id
+
+Body: `{ "note"?: string(max 2000), "resolved"?: boolean }` (parcial). Resposta: o item atualizado
+(mesmo shape do `items[]` de `GET /api/inbox`). `404` se a conversa não existir no escopo.
+
+### POST /api/inbox/:id/suggest-reply
+
+Body: `{ "text"?: string(max 3000) }`. Sem `text`, usa a última mensagem do lead. Resposta:
+`{ "reply", "costUsd" }` (rascunho gerado pela base de conhecimento do agente + custo estimado).
+`400` sem mensagem para responder; `502` em falha do LLM.
 
 ### Admin
 

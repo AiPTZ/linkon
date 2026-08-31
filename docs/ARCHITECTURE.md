@@ -73,7 +73,8 @@ Estrutura em `backend/src/`:
   duplicidade; vínculos com `User`, `Account` e `Conversation`.
 - `NativeAgent` (extra) — campos `schedulingEnabled`, `meetingDurationMin`, `meetingTitle`.
 - `Conversation` (extra) — `scheduleState` (máquina de agendamento) e `scheduleData` (JSON com o
-  contexto da oferta: slots, rodada, e-mail), relação `bookings`.
+  contexto da oferta: slots, rodada, e-mail), relação `bookings`. Para atendimento humano também
+  persiste `note` (nota interna) e `resolved` (status resolvida).
 
 ### Filas e workers (BullMQ)
 
@@ -122,6 +123,13 @@ Fluxo: **webhook → `chatbot-ai.service` → `scheduling.service` → `calendar
    Google). Desconectado → transfere ao humano; falha retryável exaurida → cancela e reoferece.
 5. O `Booking` é persistido (status `CONFIRMING` → `CONFIRMED` com `googleEventId`/`meetLink`), o
    evento aparece no Google Agenda e a conversa volta a `NONE`.
+
+### Inbox (atendimento humano)
+
+- Unread: mensagens LEAD com `createdAt > conversation.updatedAt`; `POST /read` seta `updatedAt` e zera o contador.
+- Paginação: lista por offset (ordena por status + lastMessageAt); mensagens por cursor (`id`), janela das mais recentes.
+- `note`/`resolved` persistidos em `Conversation` (PATCH `/inbox/:id`).
+- Resposta assistida: `generateHumanReply` (ai.service.ts) reusa a base de conhecimento do agente (NativeAgent) e devolve rascunho editável + custo estimado.
 
 ### Autenticação e escopo
 
