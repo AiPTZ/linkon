@@ -43,6 +43,12 @@ Este documento descreve o estado atual da implementação no repositório.
   `chatbot.service.ts` (regras), `search.service.ts` (importação de busca),
   `sweep.service.ts` (varredura), `contacts.service.ts` (scrape de contato),
   `extraction.service.ts` (extração + xlsx).
+- **Limite de 1 conta LinkedIn por usuário**: garantido no service (`assertCanConnectLinkedIn` em
+  `auth.service.ts`) — novas conexões (`connectNative` com `userId`, `confirmHosted`) retornam `409`;
+  re-confirmar a mesma conta do usuário é idempotente.
+- **Cadência de disparo**: até 5 cópias em DISPARO — JSON string em `Campaign.cadence`,
+  `Lead.cadenceStep`, envio apenas para leads que não responderam, placeholders `{nome}/{cargo}/{link}`,
+  agendamento `waitDays` dias após a cópia anterior.
 - **Filas/workers**: 6 filas BullMQ com workers em processos separados.
 - **Scheduler**: `node-cron` a cada 5 minutos processando campanhas `RUNNING` (limites, janela de
   horário, fluxos, enfileiramento).
@@ -64,11 +70,12 @@ Este documento descreve o estado atual da implementação no repositório.
 
 ## Testes
 
-- Suíte Vitest no backend (**24 arquivos de teste, 225 testes**), cobrindo: user/auth, rate limit,
+- Suíte Vitest no backend (**28 arquivos de teste, 285 testes**), cobrindo: user/auth, rate limit,
   scheduler (incl. `expireStaleScheduling`), flows, chatbot, search, contacts, sweep, campaign,
   notification, broadcast, time, scope, `calendar.service` (OAuth/evento/retry com fetch mockado),
-  `scheduling.service` (janelas, slots com fuso, e-mail, match, máquina de estados) e
-  `calendar.routes` (status, oauth/url, availability, disconnect, bookings, callback).
+  `scheduling.service` (janelas, slots com fuso, e-mail, match, máquina de estados),
+  `calendar.routes` (status, oauth/url, availability, disconnect, bookings, callback),
+  cadência (`cadence.ts`, `personalize.ts`, `campaigns.routes`, scheduler/sweep com follow-up).
 - Rodar: `npm test -w @linkon/backend`.
 - Typecheck de backend e frontend passando (`npm run typecheck`).
 - Build de backend e frontend passando (`npm run build`).

@@ -162,6 +162,8 @@ Corpo: `{ "username": string, "password": string, "country"?: string, "userId"?:
 
 Resposta `201`: `{ "status": "OK", "accountId", "account" }`. Se houver checkpoint: `202 { "status": "CHECKPOINT", "checkpoint", "accountId" }`.
 
+Quando `userId` é fornecido e esse usuário já possui uma conta `LINKEDIN` com `status ≠ "REJECTED"`, retorna `409` com `{ "error": "Limite de 1 conta LinkedIn por usuário atingido" }` (conexão admin/global sem `userId` não é bloqueada).
+
 ### POST /auth/native/checkpoint (Admin)
 
 Corpo: `{ "accountId": string, "code": string }`. Resposta: `{ "status": "OK", "accountId" }` ou `202` com novo checkpoint.
@@ -202,6 +204,8 @@ Antes de listar, tenta `syncAccounts()` com a Unipile; se a Unipile não estiver
 
 Confirma a conexão hospedada pendente do usuário. Usuário comum: cria conta local em modo "pending". Resposta: `{ "accounts": [...] }` (contas confirmadas).
 
+Se o usuário já possui outra conta com `status ≠ "REJECTED"`, retorna `409` com `{ "error": "Limite de 1 conta LinkedIn por usuário atingido" }`. Reconhecer a mesma conta que o usuário já possui é idempotente (atualiza o status, sem `409`).
+
 ### GET /accounts/:id
 
 Inclui `campaigns` (id, name, status) e `logs` (últimos 20).
@@ -225,6 +229,7 @@ Corpo (zod):
   "searchUrl": "string (obrigatório se SEARCH; para SWEEP/DISPARO é derivado)",
   "accountId": "string",
   "inviteMessage": "string(max 300)",
+  "cadence": "[ { body: string(1-300), waitDays: int(1-90) } ] (1-5 itens, opcional, somente DISPARO)",
   "dailyLimit": 40,
   "weeklyLimit": 150,
   "minDelayMin": 5,
@@ -243,7 +248,7 @@ Corpo (zod):
 }
 ```
 
-Regras: SWEEP/DISPARO exigem `inviteMessage` ou `flow.nodes` não vazio. `minDelayMin <= maxDelayMin`. `accountId` deve pertencer ao escopo. Resposta `201` com a campanha criada.
+Regras: SWEEP/DISPARO exigem `inviteMessage`, `cadence` ou `flow.nodes` não vazio. `minDelayMin <= maxDelayMin`. `accountId` deve pertencer ao escopo. `cadence` só é aceito em `mode: "DISPARO"` (caso contrário `400`). Na resposta, `cadence` é devolvido como array (persistido como JSON string). Resposta `201` com a campanha criada.
 
 ### GET /campaigns
 
@@ -255,7 +260,7 @@ Detalhe com `account` (id, username, status), `stats` e `nextInviteAt`.
 
 ### PUT /campaigns/:id
 
-Mesmo corpo de criação, parcial. Fluxo, quando presente, é validado (`400` com erros de validação).
+Mesmo corpo de criação, parcial. Fluxo, quando presente, é validado (`400` com erros de validação). Alterar `cadence` em campanha fora do modo DISPARO retorna `400`.
 
 ### POST /campaigns/:id/start | /pause | /resume
 

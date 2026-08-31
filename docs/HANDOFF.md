@@ -274,6 +274,8 @@ backoff em `429`/`5xx`. Testes mockam o fetch globalmente (`vi.stubGlobal`).
 
 - 7.12 Inbox paginado: o frontend pausa o polling de 8s do histórico enquanto `nextCursor` está ativo (evita colapsar a janela carregada); o polling da lista continua rodando. `POST /suggest-reply` exige `USER_LLM_API_KEY`; sem ela retorna 502 (o botão mostra toast).
 - 7.13 Unread usa `conversation.readAt` (não `updatedAt`): `updatedAt @updatedAt` é bumped por qualquer `conversation.update` (ex.: `lastMessageAt` no webhook), o que tornava `createdAt > updatedAt` sempre falso. `unread` = mensagens LEAD após `readAt`; `readAt` nulo = todas não lidas. `POST /inbox/:id/read` seta `readAt`.
+- 7.14 Cadência: vive em `Campaign.cadence` (JSON string, array 1-5 de `{body, waitDays}`) e `Lead.cadenceStep`. `nextInviteAt` é agendado no envio (`waitDays` inteiros); cópias 2..5 só são enviadas para leads `COMPLETED` com `cadenceStep < length` e `nextInviteAt` vencido (e `currentBlockId` nulo, sem `RESPONDED`). O card "Próximo envio" da página de detalhe não inclui follow-ups (mostra apenas o próximo envio de leads `PENDING`); o próximo follow-up aparece na coluna "Próximo envio" por lead. O scheduler só completa a campanha quando não há `PENDING` nem follow-ups. Placeholders (`{nome}`, `{cargo}`, `{link}`) são aplicados na cadência e no disparo simples via `applyPlaceholders`.
+- 7.15 Limite de 1 conta LinkedIn por usuário é garantido no service (`assertCanConnectLinkedIn`), não no banco (sem constraint). O fluxo native (`POST /auth/native`) só aplica o limite quando o body traz `userId` (conexão admin/global não é bloqueada); `confirm-hosted` é idempotente para a mesma conta do usuário (atualiza status sem `409`) e retorna `409` para outra conta.
 
 ---
 

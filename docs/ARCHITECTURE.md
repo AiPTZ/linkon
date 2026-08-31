@@ -56,11 +56,15 @@ Estrutura em `backend/src/`:
 - `User` — `{ id, name, username (único), passwordHash, whatsapp, role, status }`. `status`: `PENDING`,
   `ACTIVE`, `BLOCKED`. `role`: `USER` | `ADMIN`.
 - `Account` — conta LinkedIn conectada; `userId` opcional (nulo = global). Guarda `credentialsEnc`
-  (criptografado), `authMethod` (`NATIVE`/`HOSTED`), `status`, `checkpointType`.
+  (criptografado), `authMethod` (`NATIVE`/`HOSTED`), `status`, `checkpointType`. Cada usuário pode ter
+  no máximo uma conta com `status ≠ "REJECTED"` — regra garantida no service
+  (`assertCanConnectLinkedIn` em `auth.service.ts`), sem constraint de banco.
 - `Campaign` — `mode` (`SEARCH`/`SWEEP`/`DISPARO`), limites, janela de trabalho, chatbot, `flow`
   (JSON serializado), contadores de envio (`invitesSentToday`, `invitesSentWeek`), `userId` opcional.
+  Em DISPARO pode ter `cadence` (JSON string com 1-5 itens `{body, waitDays}`) para follow-ups.
 - `Lead` — lead de campanha; `status` (`PENDING`, `INVITED`, `ACCEPTED`, `RESPONDED`, ...), `selected`
-  (para DISPARO), controle de reenvio (`nextInviteAt`), `currentBlockId` (fluxos).
+  (para DISPARO), controle de reenvio (`nextInviteAt`), `currentBlockId` (fluxos), `cadenceStep`
+  (cópia atual da cadência).
 - `Extraction` / `ExtractedLead` — extrações e leads extraídos (emails, telefones, socials, distância).
 - `LogEvent` — log com `type`, `level`, `message`, `payload`, vínculos opcionais.
 - `Notification` — notificação com `read`.
@@ -99,6 +103,15 @@ Filas em `services/queue.service.ts`, consumidas por processos separados (`worke
   ou `processInviteCampaign` (SEARCH), enfileirando os jobs correspondentes.
 
 O scheduler roda dentro do processo da API (`startScheduler` em `index.ts`).
+
+**Cadência de disparo:** para campanhas DISPARO com `cadence`, `processBroadcastCampaign` seleciona
+primeiro os leads da cópia 1 (`PENDING`), depois os follow-ups (`COMPLETED` + `cadenceStep < length` +
+`nextInviteAt` vencido). O `sweep.worker` aceita leads `COMPLETED` em cadência via `isEligibleForSweep`;
+`sendSweepMessage` resolve o texto em `cadence[cadenceStep]` (ou `inviteMessage` quando não há cadência),
+aplica `applyPlaceholders` (`{nome}`, `{cargo}`, `{link}`), incrementa `cadenceStep` e agenda a próxima
+cópia `waitDays * 24h` após o envio (sem próximo agendamento na última cópia). Um reply do webhook
+(`RESPONDED`) desqualifica o lead. A campanha só conclui quando não restam leads `PENDING` nem
+follow-ups.
 
 Além do cron de campanhas, o scheduler roda `expireStaleScheduling()` a cada 5 minutos (junto das
 campanhas) e também em um cron dedicado a cada 15 minutos: conversas presas em `OFFERING` /
