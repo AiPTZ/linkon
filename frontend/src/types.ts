@@ -46,6 +46,11 @@ export type LeadStatus =
   | "ERROR"
   | "COMPLETED";
 
+export interface CadenceStep {
+  body: string;
+  waitDays: number;
+}
+
 export type BlockType =
   | "start"
   | "invite"
@@ -174,6 +179,7 @@ export interface Campaign {
   accountId: string;
   account: { id: string; username: string | null; status: AccountStatus };
   inviteMessage: string;
+  cadence: CadenceStep[];
   dailyLimit: number;
   weeklyLimit: number;
   minDelayMin: number;
@@ -214,6 +220,7 @@ export interface Lead {
   nextInviteAt: string | null;
   currentBlockId: string | null;
   replyCount: number;
+  cadenceStep: number;
   errorCode: string | null;
   createdAt: string;
 }
@@ -281,6 +288,7 @@ export interface CampaignPayload {
   searchUrl?: string;
   accountId: string;
   inviteMessage?: string;
+  cadence?: CadenceStep[];
   dailyLimit?: number;
   weeklyLimit?: number;
   minDelayMin?: number;
