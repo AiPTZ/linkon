@@ -15,7 +15,7 @@
                  │  dev.db      │   │   Redis      │   │  Workers BullMQ      │
                  │ (AppConfig,  │   │  6379        │   │  invites, chatbot,   │
                  │  User, ...)  │   └──────────────┘   │  search, sweep,      │
-                 └──────────────┘                      │  contacts, extraction│
+                 └──────────────┘                      │  contacts            │
                                                        └──────────────────────┘
                                                        ┌──────────────────────┐
                                                        │  Scheduler (cron 5m) │
@@ -45,7 +45,7 @@ Estrutura em `backend/src/`:
 | `lib/` | `prisma.ts`, `redis.ts` — clientes |
 | `middleware/` | `auth.ts` (requireAuth/requireAdmin), `rateLimit.ts` (login) |
 | `routes/` | Controllers da API (ver [API.md](./API.md)) |
-| `services/` | Lógica de negócio (user, auth, campaign, invite, chatbot, flow, sweep, broadcast, search, contacts, extraction, config, queue, log, notification, unipile, calendar, scheduling) |
+| `services/` | Lógica de negócio (user, auth, campaign, invite, chatbot, flow, sweep, broadcast, search, contacts, network, config, queue, log, notification, unipile, calendar, scheduling) |
 | `workers/` | Processos BullMQ |
 | `scheduler.ts` | Cron de 5 minutos que processa campanhas RUNNING |
 | `utils/` | `time`, `crypto`, `errors`, `logger`, `scope` |
@@ -65,7 +65,8 @@ Estrutura em `backend/src/`:
 - `Lead` — lead de campanha; `status` (`PENDING`, `INVITED`, `ACCEPTED`, `RESPONDED`, ...), `selected`
   (para DISPARO), controle de reenvio (`nextInviteAt`), `currentBlockId` (fluxos), `cadenceStep`
   (cópia atual da cadência).
-- `Extraction` / `ExtractedLead` — extrações e leads extraídos (emails, telefones, socials, distância).
+- `Contact` — contato da rede da conta (dedup `@@unique([accountId, providerId])`); `name`, `headline`,
+  `profileUrl`, `publicIdentifier`, `emails`, `phones`, `socials`, `networkDistance`, `scrapedAt`.
 - `LogEvent` — log com `type`, `level`, `message`, `payload`, vínculos opcionais.
 - `Notification` — notificação com `read`.
 - `WebhookRegistration` — registro de webhooks da Unipile.
@@ -90,8 +91,7 @@ Filas em `services/queue.service.ts`, consumidas por processos separados (`worke
 | `linkon-chatbot` | `chatbot.worker.ts` | Envia resposta automática (`{chatId, leadId, campaignId, message}`) |
 | `linkon-search` | `search.worker.ts` | Importa leads de busca/varredura (`{campaignId}`) |
 | `linkon-sweep` | `sweep.worker.ts` | Envia mensagem de varredura para um lead |
-| `linkon-contacts` | `contacts.worker.ts` | Coleta contato (email/telefone) de um lead |
-| `linkon-extraction` | `extraction.worker.ts` | Executa extração e scrape de perfis (`{extractionId, type}`) |
+| `linkon-contacts` | `contacts.worker.ts` | Sincroniza a rede (`sync-network`) e coleta detalhes de contatos/leads (`scrape`) |
 
 ### Scheduler
 
@@ -144,6 +144,23 @@ Fluxo: **webhook → `chatbot-ai.service` → `scheduling.service` → `calendar
 - `note`/`resolved` persistidos em `Conversation` (PATCH `/inbox/:id`).
 - Resposta assistida: `generateHumanReply` (ai.service.ts) reusa a base de conhecimento do agente (NativeAgent) e devolve rascunho editável + custo estimado.
 
+### Contatos (rede da conta)
+
+- **Modelo** — `Contact` dedup por `@@unique([accountId, providerId])`; acumulativo (sync nunca apaga).
+- **Sync** — `syncAccountNetwork` (network.service) itera `getRelations` com paginação por cursor e
+  `sleep(randomInt(2000,5000))` entre páginas; enfileirado (`sync-network` na `linkon-contacts`) ao
+  conectar/ativar a conta (`confirmHosted` e `POST /admin/accounts/:id/approve`) e manualmente
+  (`POST /contacts/sync`).
+- **Aceite de convite** — webhook `new_relation` faz `upsertRelationContact(campaign.accountId, ...)`
+  além de marcar o lead como `ACCEPTED` (só quando há lead vinculado).
+- **Scrape** — `POST /contacts/scrape` agenda jobs `scrape` (delay `scheduled * 1500`) via
+  `scheduleContactScrape`; o `contacts.worker` chama `scrapeContactById` (grava emails/phones/socials/
+  `networkDistance`/`scrapedAt`). Erros não-retryáveis da Unipile marcam `scrapedAt` sem quebrar a fila.
+- **Consulta/exportação** — `GET /contacts` (filtros `q`, `onlyWithContact`, `accountId`, `scraped`,
+  `limit` ≤ 1000, escopo por usuário) e `GET /contacts/export-xlsx` (`buildContactsXlsx`, ExcelJS).
+- A aba antiga de extração por URL (`Extraction`/`ExtractedLead`) foi removida; a rede é populada do zero
+  (dados antigos não são copiados).
+
 ### Autenticação e escopo
 
 - **JWT**: payload `{ sub, username, role, status }`, assinado com `AUTH_SECRET`, expira em 7 dias.
@@ -174,7 +191,7 @@ Rotas (`App.tsx`):
 | `/campanhas`, `/campanhas/nova`, `/campanhas/:id`, `/campanhas/:id/fluxo` | Campanhas |
 | `/conectar` | Contas LinkedIn |
 | `/disparos`, `/disparos/nova`, `/disparos/:id`, `/disparos/:id/selecionar` | Disparos |
-| `/extracao`, `/extracao/:id` | Extrações |
+| `/contatos` | Contatos da rede (consulta, sync, scrape, exportação) |
 | `/configuracoes` | Configurações (por papel) |
 | `/administracao` | Painel admin (RequireAdmin) |
 | `/tutorial` | Tutorial |
@@ -199,4 +216,7 @@ O frontend não conhece segredos; usa apenas `VITE_WHATSAPP_SUPPORT` (link de su
 4. **Chatbot** — webhook `message_received` → marca lead `RESPONDED`, avança fluxo e (se habilitado)
    enfileira resposta no `linkon-chatbot`. Com agendamento habilitado, conversas em estado ativo
    roteiam para a máquina de agendamento (ver seção acima).
-5. **Extração** — `POST /api/extractions` → `extraction.worker` roda busca + scrape → export `.xlsx`.
+5. **Contatos** — banco acumulativo da rede da conta: `syncAccountNetwork` (`getRelations` com
+   paginação) roda ao conectar/ativar a conta, ao aceitar convite (webhook `new_relation` → upsert do
+   contato) e manualmente (`POST /contacts/sync`). `POST /contacts/scrape` agenda coleta de detalhes
+   (`getUserContactDetails`) via `contacts.worker`; export `.xlsx` em `GET /contacts/export-xlsx`.

@@ -62,12 +62,11 @@ redis-server --daemonize yes
 - API: http://localhost:3001
 - Health: http://localhost:3001/api/health
 
-O `start.sh` sobe a API, os workers de convites, chatbot, busca e varredura, e o frontend. Os workers de
-contatos e extração são iniciados separadamente:
+O `start.sh` sobe a API, os workers de convites, chatbot, busca e varredura, e o frontend. O worker de
+contatos é iniciado separadamente:
 
 ```bash
 npm run dev:contacts-worker -w @linkon/backend
-npm run dev:extraction-worker -w @linkon/backend
 ```
 
 ### Configuração inicial

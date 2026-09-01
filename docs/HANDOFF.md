@@ -37,10 +37,17 @@ dados de perfis com exportação para `.xlsx`.
   confirmada no Inbox. Configuração em **Configurações → Google Agenda** (conectar conta + janelas) e
   no bloco **Agendamento de reuniões** do agente nativo.
 - Multi-usuário com papéis USER/ADMIN, escopo por usuário, aprovação de cadastro e painel admin.
+- **Banco de contatos** (aba "Contatos"): substitui a extração por URL. A rede da conta é sincronizada
+  (dedup `accountId+providerId`) ao conectar/ativar a conta, ao aceitar convite (`new_relation`) e
+  manualmente; a página permite busca/filtros, sincronizar, raspar detalhes e exportar `.xlsx`.
 - Rate limits por IP real (login, registro, API autenticada e webhooks) e proteções para rodar atrás
   de Cloudflare (ver seção 5).
 - `docs/` com arquitetura, API e integração; `docs/superpowers/` com os designs/planos de cada fase
   (gitignored, só local).
+
+> **Pendências deste ciclo:** a campanha de smoke `SMOKE cadencia` (id `cmthm67lx0002w13fxqcynbk4`,
+> status DRAFT) aguarda decisão de manter/excluir. A página de Contatos não expõe ainda o filtro
+> `scraped` nem paginação explícita (a API suporta ambos) — considerar adicionar numa próxima iteração.
 
 ---
 
@@ -76,8 +83,8 @@ redis-server --daemonize yes
 - Frontend: http://localhost:5173 (proxy `/api` -> http://localhost:3001, `allowedHosts` inclui
   `*.monkeycode-ai.live` para previews).
 - API: http://localhost:3001 · Health: `/api/health`.
-- Workers de contatos e extração são **separados**:
-  `npm run dev:contacts-worker -w @linkon/backend` e `npm run dev:extraction-worker -w @linkon/backend`.
+- Worker de contatos é **separado**:
+  `npm run dev:contacts-worker -w @linkon/backend`.
 
 ### Contas demo (base de preview)
 
@@ -102,7 +109,7 @@ Em instalação nova só existe o admin (de `ADMIN_USERNAME`/`ADMIN_PASSWORD` no
                  ┌─────────────────────────────── Express :3001 ────────────────────────────┐
                  │  securityHeaders -> cors -> rateLimit -> rotas                            │
                  │  /health /webhooks /auth (públicas)                                       │
-                 │  /config /accounts /agents /campaigns /extractions /logs /notifications   │
+                 │  /config /accounts /agents /campaigns /contacts /logs /notifications      │
                  │  /inbox /admin (requireAuth + rateLimit + escopo por usuário)             │
                  └───────┬─────────────┬──────────────┬──────────────┬───────────────────────┘
                          │             │              │              │
@@ -111,11 +118,11 @@ Em instalação nova só existe o admin (de `ADMIN_USERNAME`/`ADMIN_PASSWORD` no
                          │
             ┌────────────┴────────────────────────────────────────────┐
             ▼                                                          ▼
-   Workers: invite, chatbot, search, sweep, contacts, extraction    Webhooks unipile
+   Workers: invite, chatbot, search, sweep, contacts    Webhooks unipile
 ```
 
-- **Filas BullMQ**: `invitesQueue`, `chatbotQueue`, `searchQueue`, `sweepQueue` (em
-  `backend/src/services/queue.service.ts`), além de contatos/extração. Cada worker consome a própria fila.
+- **Filas BullMQ**: `invitesQueue`, `chatbotQueue`, `searchQueue`, `sweepQueue` e `contactsQueue` (em
+  `backend/src/services/queue.service.ts`). Cada worker consome a própria fila.
 - **Escopo**: `backend/src/utils/scope.ts` resolve o usuário (do JWT ou `X-Operate-As` do admin) e
   filtra dados por `userId`. Contas/campanhas legadas têm `userId=null` e ficam visíveis ao admin.
 - **Modelo de dados**: `backend/prisma/schema.prisma`. **Não há migrations** — altere o schema e rode
@@ -276,12 +283,14 @@ backoff em `429`/`5xx`. Testes mockam o fetch globalmente (`vi.stubGlobal`).
 - 7.13 Unread usa `conversation.readAt` (não `updatedAt`): `updatedAt @updatedAt` é bumped por qualquer `conversation.update` (ex.: `lastMessageAt` no webhook), o que tornava `createdAt > updatedAt` sempre falso. `unread` = mensagens LEAD após `readAt`; `readAt` nulo = todas não lidas. `POST /inbox/:id/read` seta `readAt`.
 - 7.14 Cadência: vive em `Campaign.cadence` (JSON string, array 1-5 de `{body, waitDays}`) e `Lead.cadenceStep`. `nextInviteAt` é agendado no envio (`waitDays` inteiros); cópias 2..5 só são enviadas para leads `COMPLETED` com `cadenceStep < length` e `nextInviteAt` vencido (e `currentBlockId` nulo, sem `RESPONDED`). O card "Próximo envio" da página de detalhe não inclui follow-ups (mostra apenas o próximo envio de leads `PENDING`); o próximo follow-up aparece na coluna "Próximo envio" por lead. O scheduler só completa a campanha quando não há `PENDING` nem follow-ups. Placeholders (`{nome}`, `{cargo}`, `{link}`) são aplicados na cadência e no disparo simples via `applyPlaceholders`.
 - 7.15 Limite de 1 conta LinkedIn por usuário é garantido no service (`assertCanConnectLinkedIn`), não no banco (sem constraint). O fluxo native (`POST /auth/native`) só aplica o limite quando o body traz `userId` (conexão admin/global não é bloqueada); `confirm-hosted` é idempotente para a mesma conta do usuário (atualiza status sem `409`) e retorna `409` para outra conta.
+- 7.16 Contatos usam o **id local** do `Account`: `contactsQueue.add("sync-network", { accountId })` recebe o `id` do Prisma (ex.: `existing.id`), **nunca** `acc.id`/`unipileAccountId` (id da API do Unipile) — o worker faz `prisma.account.findUnique({ where: { id } })`. Há teste de regressão.
+- 7.17 `GET /contacts/export-xlsx?providerIds=...` espera **provider ids** (campo `Contact.providerId`), não os ids internos `Contact.id`; o frontend mapeia a seleção para `providerId`. O endpoint exige `accountId` para não-admin (400 sem ele) — evita vazar contatos de todos os tenants.
 
 ---
 
 ## 8. Testes
 
-- Backend: `npx vitest run` (175 testes, 21 arquivos). Testes de rotas mockam o Prisma
+- Backend: `npx vitest run` (317 testes, 31 arquivos). Testes de rotas mockam o Prisma
   (`vi.mock("../lib/prisma")`) e chamam os handlers diretamente (sem HTTP).
 - Rate limit: `backend/src/middleware/rateLimit.test.ts` (inclui teste de isolamento entre instâncias e
   chave por `CF-Connecting-IP`).

@@ -44,8 +44,7 @@ O `GET /api/config` expõe apenas *se* estão configurados (`unipileDsnConfigure
 
 - Usado pelo BullMQ (filas) e pelo ioredis (`lib/redis.ts`).
 - Configuração: `REDIS_URL` (padrão `redis://localhost:6379`).
-- Filas: `linkon-invites`, `linkon-chatbot`, `linkon-search`, `linkon-sweep`, `linkon-contacts`,
-  `linkon-extraction`.
+- Filas: `linkon-invites`, `linkon-chatbot`, `linkon-search`, `linkon-sweep`, `linkon-contacts`.
 - O dump local do Redis (`dump.rdb`) é ignorado pelo `.gitignore`.
 
 ## WhatsApp de suporte

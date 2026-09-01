@@ -57,12 +57,11 @@ Convenções:
 | GET | `/campaigns/:id/scrape-status` | Status da coleta de contatos |
 | GET | `/campaigns/:id/export-xlsx` | Exporta leads em `.xlsx` |
 | GET | `/campaigns/:id/logs` | Logs da campanha (paginado) |
-| POST | `/extractions` | Cria extração |
-| GET | `/extractions` | Lista extrações do escopo |
-| GET | `/extractions/:id` | Detalhe da extração + `leadsCount` |
-| GET | `/extractions/:id/leads` | Lista leads extraídos |
-| GET | `/extractions/:id/export-xlsx` | Exporta extração em `.xlsx` |
-| DELETE | `/extractions/:id` | Exclui extração |
+| GET | `/contacts` | Lista contatos da rede (filtros e paginação) |
+| GET | `/contacts/:id` | Detalhe do contato |
+| POST | `/contacts/sync` | Sincroniza a rede da conta (enfileira) |
+| POST | `/contacts/scrape` | Agenda coleta de detalhes dos contatos |
+| GET | `/contacts/export-xlsx` | Exporta contatos em `.xlsx` |
 | GET | `/logs` | Logs globais (paginado, filtro `campaignId`) |
 | GET | `/notifications` | Notificações recentes |
 | POST | `/notifications/read-all` | Marca todas como lidas |
@@ -302,29 +301,34 @@ Baixa `.xlsx` com os leads. Header `Content-Disposition: attachment`.
 
 Query: `page`, `pageSize`. Resposta: `{ "items", "total", "page", "pageSize" }`.
 
-### POST /extractions
+### GET /contacts
 
-Corpo: `{ "name"?: string(max 120), "searchUrl": string(1-2000), "accountId": string, "maxResults"?: int(1-500) }`. A conta deve pertencer ao escopo. Resposta `201` com a extração (status `PROCESSING`).
+Lista os contatos da rede das contas do escopo (usuário vê só as contas dele; admin vê todas, podendo usar `x-operate-as`).
 
-### GET /extractions
+Query:
+- `q` — busca por nome/cargo/perfil.
+- `onlyWithContact=1` — apenas contatos com e-mail/telefone.
+- `accountId` — filtra por conta.
+- `scraped=1` — apenas contatos já raspados.
+- `limit` — 1 a 1000 (padrão 200).
 
-Resposta: `{ "items": [...] }`.
+Resposta: `{ "items": [ { "id", "accountId", "providerId", "publicIdentifier", "name", "headline", "profileUrl", "emails", "phones", "socials", "networkDistance", "scrapedAt", "createdAt", "account": { "id", "username" } } ], "total": n }`.
 
-### GET /extractions/:id
+### GET /contacts/:id
 
-Detalhe + `{ "leadsCount": n }`.
+Detalhe do contato (com `account` embutido). `404` se não existir ou estiver fora do escopo.
 
-### GET /extractions/:id/leads
+### POST /contacts/sync
 
-Query: `onlyWithContact=1|true`. Resposta: `{ "items", "total" }`.
+Corpo: `{ "accountId": string }`. A conta deve pertencer ao escopo. Enfileira o job `sync-network` (retorno rápido). Resposta: `{ "ok": true }`.
 
-### GET /extractions/:id/export-xlsx
+### POST /contacts/scrape
 
-Query: `providerIds=a,b,c`. Baixa `.xlsx` (todos ou apenas os `providerIds`).
+Corpo: `{ "contactIds"?: string[] }`. Sem `contactIds`, agenda o scrape de todos os pendentes do escopo. Resposta: `{ "ok": true, "scheduled": n }`.
 
-### DELETE /extractions/:id
+### GET /contacts/export-xlsx
 
-Resposta `{ "ok": true }`.
+Query: `accountId` (obrigatório para não-admin), `providerIds=a,b,c` (opcional). Baixa `.xlsx` com os contatos (todos ou apenas os `providerIds`).
 
 ### GET /logs
 
@@ -416,7 +420,7 @@ Corpo: `{ "name": string(1-120), "username": string(3-40), "password": string(6-
 
 #### GET /admin/users
 
-Resposta: `{ "items": [ { "id", "username", "name", "role", "status", "whatsapp", "createdAt", "_count": { "accounts", "campaigns", "extractions" } } ] }`.
+Resposta: `{ "items": [ { "id", "username", "name", "role", "status", "whatsapp", "createdAt", "_count": { "accounts", "campaigns", "contacts" } } ] }`.
 
 #### POST /admin/users/:id/approve | /block | /unblock
 
@@ -428,7 +432,7 @@ Corpo: `{ "password": string(min 6) }`. Resposta `{ "ok": true }`.
 
 #### GET /admin/global
 
-Resposta: `{ "campaigns": n, "extractions": n }` (registros com `userId` nulo).
+Resposta: `{ "campaigns": n, "contacts": n }` (registros com `userId` nulo).
 
 ## Webhooks da Unipile
 

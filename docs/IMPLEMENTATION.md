@@ -21,7 +21,7 @@ Este documento descreve o estado atual da implementação no repositório.
 | `npm run db:push` | Sincroniza o schema Prisma com o banco |
 | `npm test -w @linkon/backend` | Roda a suíte de testes do backend |
 | `npm run dev -w @linkon/backend` | Sobe apenas a API (porta 3001) |
-| `npm run dev:<worker>-worker -w @linkon/backend` | Sobe um worker (invite, chatbot, search, sweep, contacts, extraction) |
+| `npm run dev:<worker>-worker -w @linkon/backend` | Sobe um worker (invite, chatbot, search, sweep, contacts) |
 | `npm run dev -w @linkon/frontend` | Sobe o frontend (porta 5173) |
 
 ## O que está implementado
@@ -41,15 +41,20 @@ Este documento descreve o estado atual da implementação no repositório.
 - **Campanhas**: `campaign.service.ts` (start/pause/resume), `invite.service.ts` (limites, atraso,
   reenvio), `broadcast.service.ts` (sweep/disparo), `flow.service.ts` (fluxos validados),
   `chatbot.service.ts` (regras), `search.service.ts` (importação de busca),
-  `sweep.service.ts` (varredura), `contacts.service.ts` (scrape de contato),
-  `extraction.service.ts` (extração + xlsx).
+  `sweep.service.ts` (varredura), `contacts.service.ts` (scrape de contato de leads).
+- **Contatos da rede**: `network.service.ts` (sync da rede via `getRelations` com paginação, upsert
+  dedup `accountId+providerId`, scrape via `getUserContactDetails`, estatísticas, XLSX, lista/consulta,
+  `upsertRelationContact` no aceite de convite); rotas `/contacts`; worker `contacts.worker.ts`
+  (jobs `sync-network` e `scrape`). Gatilhos de sync ao conectar/ativar conta e no
+  webhook `new_relation`. A extração por URL (`extraction.service.ts`/`extraction.worker.ts`) foi
+  removida.
 - **Limite de 1 conta LinkedIn por usuário**: garantido no service (`assertCanConnectLinkedIn` em
   `auth.service.ts`) — novas conexões (`connectNative` com `userId`, `confirmHosted`) retornam `409`;
   re-confirmar a mesma conta do usuário é idempotente.
 - **Cadência de disparo**: até 5 cópias em DISPARO — JSON string em `Campaign.cadence`,
   `Lead.cadenceStep`, envio apenas para leads que não responderam, placeholders `{nome}/{cargo}/{link}`,
   agendamento `waitDays` dias após a cópia anterior.
-- **Filas/workers**: 6 filas BullMQ com workers em processos separados.
+- **Filas/workers**: 5 filas BullMQ com workers em processos separados.
 - **Scheduler**: `node-cron` a cada 5 minutos processando campanhas `RUNNING` (limites, janela de
   horário, fluxos, enfileiramento).
 - **Notificações e logs**: `notification.service.ts`, `log.service.ts`.
@@ -65,16 +70,18 @@ Este documento descreve o estado atual da implementação no repositório.
 - SPA com rotas protegidas (`RequireAuth`) e rota admin (`RequireAdmin`).
 - Temas: ink `#0a0a0b`, dourado `#d4af37`, creme `#f5f2ea`; tipografia Playfair Display + Inter.
 - Cliente HTTP com Bearer JWT e `X-Operate-As` (`lib/api.ts`), estado de auth reidratado no mount.
-- Páginas: landing, login/registro, contas (assistente do LinkedIn), campanhas, disparos, extrações,
+- Páginas: landing, login/registro, contas (assistente do LinkedIn), campanhas, disparos, contatos,
   configurações (adaptada por papel), administração (usuários, contas, saúde), tutorial.
 
 ## Testes
 
-- Suíte Vitest no backend (**28 arquivos de teste, 285 testes**), cobrindo: user/auth, rate limit,
+- Suíte Vitest no backend (**31 arquivos de teste, 317 testes**), cobrindo: user/auth, rate limit,
   scheduler (incl. `expireStaleScheduling`), flows, chatbot, search, contacts, sweep, campaign,
-  notification, broadcast, time, scope, `calendar.service` (OAuth/evento/retry com fetch mockado),
+  notification, broadcast, time, scope, queue (tipos de job), network (sync/scrape/xlsx/lista),
+  contacts.routes, `calendar.service` (OAuth/evento/retry com fetch mockado),
   `scheduling.service` (janelas, slots com fuso, e-mail, match, máquina de estados),
   `calendar.routes` (status, oauth/url, availability, disconnect, bookings, callback),
+  webhooks (incl. `new_relation` → upsert de contato),
   cadência (`cadence.ts`, `personalize.ts`, `campaigns.routes`, scheduler/sweep com follow-up).
 - Rodar: `npm test -w @linkon/backend`.
 - Typecheck de backend e frontend passando (`npm run typecheck`).
@@ -100,7 +107,7 @@ Este documento descreve o estado atual da implementação no repositório.
 - `.env.example` com placeholders; valores reais nunca commitados.
 - Senhas nunca voltam na API; usuário desativado (`PENDING`/`BLOCKED`) recebe `401`.
 - Sem exclusão física de usuários na API (bloqueio via `status`); exclusão física só existe para
-  campanhas e extrações do próprio escopo.
+  campanhas do próprio escopo.
 - Credenciais de contas criptografadas em repouso (AES-256-GCM, `CREDENTIALS_ENCRYPTION_KEY`).
 - CORS com `origin: true` (reflete o origin do request); o backend valida o secret do webhook.
 

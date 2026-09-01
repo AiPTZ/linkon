@@ -71,12 +71,12 @@ recente disponível), cobrindo todos os CVEs do pacote de uma vez.
 
 ### 3.1. `express_xss` (HIGH, 2 ocorrências) — falso-positivo
 
-- **Locais**: `backend/src/routes/extractions.routes.ts` (`GET /api/extractions/:id/export-xlsx`) e
+- **Locais**: `backend/src/routes/contacts.routes.ts` (`GET /api/contacts/export-xlsx`) e
   `backend/src/routes/campaigns.routes.ts` (`GET /api/campaigns/:id/export-xlsx`).
 - **Análise**: `res.send(buffer)` envia um **binário XLSX**, com
   `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` e
   `Content-Disposition: attachment` definidos **antes** do `send`. Não há interpretação como HTML, logo
-  não há vetor de XSS. `filename` é gerado no servidor (`getScopedCampaign`/`exportExtractionXlsx`).
+  não há vetor de XSS. `filename` é gerado no servidor (`getScopedCampaign`/`buildContactsXlsx`).
 - **Decisão**: nenhuma mudança de código. Documentado como falso-positivo.
 
 ### 3.2. `missing-integrity` (MEDIUM) — não aplicável

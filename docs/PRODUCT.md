@@ -3,8 +3,8 @@
 ## Visão geral
 
 O LinkON é uma plataforma web de automação de prospecção no LinkedIn. Ele conecta contas do LinkedIn
-através da API da Unipile e executa campanhas de convite, varredura de rede, disparos e extração de
-dados, com ritmo controlado para parecer humano e reduzir risco de bloqueio da conta.
+através da API da Unipile e executa campanhas de convite, varredura de rede, disparos e coleta de
+contatos da rede, com ritmo controlado para parecer humano e reduzir risco de bloqueio da conta.
 
 ## Personas
 
@@ -60,12 +60,13 @@ Quando o limite semanal é atingido, a campanha é pausada com status `LIMIT_HIT
   respostas por lead (`maxRepliesPerLead`).
 - Ativação via webhook `message_received`; a resposta é enfileirada com atraso aleatório.
 
-### Extração de dados
+### Banco de contatos
 
-- Criação de extração a partir de uma URL de busca, com contagem máxima de resultados.
-- Varredura de perfis em background (worker `linkon-extraction`) capturando emails, telefones, links e
-  distância de rede.
-- Detalhe por extração, listagem de leads extraídos (filtro `onlyWithContact`) e exportação `.xlsx`.
+- A aba **Contatos** é um banco acumulativo da rede da conta LinkedIn conectada (dedup por
+  `accountId+providerId`), populado ao conectar/ativar a conta e ao aceitar convites.
+- Sincronização manual (botão "Sincronizar") e varredura de perfis em background (worker
+  `linkon-contacts`, job `scrape`) capturando emails, telefones, links e distância de rede.
+- Busca, filtros (com e-mail/telefone, raspados), detalhe do contato e exportação `.xlsx`.
 
 ### Notificações e logs
 
@@ -101,7 +102,7 @@ Ver tabela no [README](../README.md#contas-demo). Resumo:
 | Campanhas SEARCH / SWEEP / DISPARO | Implementado |
 | Fluxos visuais de mensagens | Implementado |
 | Chatbot por regras | Implementado |
-| Extração com exportação XLSX | Implementado |
+| Banco de contatos com exportação XLSX | Implementado |
 | Notificações e logs | Implementado |
 | Painel administrativo | Implementado |
 | Rate limit no login | Implementado |
