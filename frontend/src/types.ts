@@ -17,6 +17,7 @@ export interface AuthUser {
   name: string;
   role: UserRole;
   status: UserStatus;
+  pro: boolean;
 }
 
 export interface AdminUser extends AuthUser {
