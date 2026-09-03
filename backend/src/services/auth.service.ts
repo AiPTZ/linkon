@@ -13,6 +13,11 @@ export interface NativeAuthResult {
   localAccountId?: string;
 }
 
+export interface NativeOptions {
+  userId?: string | null;
+  approvalRequired?: boolean;
+}
+
 export async function assertCanConnectLinkedIn(userId: string): Promise<void> {
   const owned = await prisma.account.count({
     where: { userId, status: { not: "REJECTED" } },
@@ -24,8 +29,9 @@ export async function connectNative(
   username: string,
   password: string,
   country?: string,
-  userId?: string | null,
+  options: NativeOptions = {},
 ): Promise<NativeAuthResult> {
+  const { userId = null, approvalRequired = false } = options;
   if (userId) await assertCanConnectLinkedIn(userId);
   const result = await unipile.connectLinkedinNative(username, password, country);
 
@@ -39,10 +45,11 @@ export async function connectNative(
   }
 
   const account = result as unknown as UnipileAccount;
+  const status = approvalRequired ? "PENDING_LINKEDIN" : "OK";
   const local = await prisma.account.upsert({
     where: { unipileAccountId: account.id },
-    update: { status: "OK", checkpointType: null, username, authMethod: "NATIVE", userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
-    create: { unipileAccountId: account.id, username, authMethod: "NATIVE", status: "OK", userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
+    update: { status, checkpointType: null, username, authMethod: "NATIVE", userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
+    create: { unipileAccountId: account.id, username, authMethod: "NATIVE", status, userId: userId ?? null, credentialsEnc: encrypt(JSON.stringify({ username, password })) },
   });
   return { account, localAccountId: local.id };
 }
@@ -50,9 +57,12 @@ export async function connectNative(
 export async function solveCheckpoint(
   localAccountId: string,
   code: string,
+  options: NativeOptions = {},
 ): Promise<NativeAuthResult> {
+  const { userId = null, approvalRequired = false } = options;
   const local = await prisma.account.findUnique({ where: { id: localAccountId } });
   if (!local) throw new ApiError(404, "Conta não encontrada");
+  if (userId && local.userId !== userId) throw new ApiError(403, "Você não pode verificar esta conta");
 
   const result = await unipile.solveCheckpoint(local.unipileAccountId, code);
 
@@ -66,11 +76,13 @@ export async function solveCheckpoint(
 
   await prisma.account.update({
     where: { id: localAccountId },
-    data: { status: "OK", checkpointType: null },
+    data: { status: approvalRequired ? "PENDING_LINKEDIN" : "OK", checkpointType: null },
   });
   await createLog({
     type: "ACCOUNT_CONNECTED",
-    message: "Conta LinkedIn conectada com sucesso",
+    message: approvalRequired
+      ? "Conta LinkedIn conectada, aguardando aprovação do administrador"
+      : "Conta LinkedIn conectada com sucesso",
     accountId: localAccountId,
   });
   return { localAccountId };

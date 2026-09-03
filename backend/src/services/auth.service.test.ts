@@ -184,7 +184,7 @@ describe("confirmHosted (sync de rede)", () => {
 describe("connectNative", () => {
   it("bloqueia com 409 quando userId é fornecido e o usuário já possui conta", async () => {
     accountCount.mockResolvedValue(1);
-    await expect(connectNative("user", "pass", undefined, "U1")).rejects.toMatchObject({
+    await expect(connectNative("user", "pass", undefined, { userId: "U1" })).rejects.toMatchObject({
       status: 409,
     });
     expect(connectLinkedinNative).not.toHaveBeenCalled();
@@ -196,7 +196,7 @@ describe("connectNative", () => {
       provider_id: "P1",
       first_name: "F",
     });
-    const res = await connectNative("user", "pass", undefined, null);
+    const res = await connectNative("user", "pass", undefined, { userId: null });
     expect(accountCount).not.toHaveBeenCalled();
     expect(res.localAccountId).toBe("A1");
     expect(accountUpsert).toHaveBeenCalled();

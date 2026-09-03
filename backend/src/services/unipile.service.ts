@@ -187,10 +187,11 @@ export class UnipileService {
     notifyUrl?: string;
     name?: string;
   }): Promise<{ object: string; url: string }> {
+    const apiUrl = (params.apiUrl.includes("://") ? params.apiUrl : `https://${params.apiUrl}`).replace(/\/+$/, "");
     const body: Record<string, unknown> = {
       type: "create",
       providers: ["LINKEDIN"],
-      api_url: params.apiUrl,
+      api_url: apiUrl,
       expiresOn: params.expiresOn,
     };
     if (params.successRedirectUrl) body.success_redirect_url = params.successRedirectUrl;

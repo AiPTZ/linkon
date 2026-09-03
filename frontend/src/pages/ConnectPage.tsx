@@ -23,7 +23,7 @@ interface HostedResponse {
 }
 
 interface NativeResponse {
-  status: "OK" | "CHECKPOINT";
+  status: "OK" | "CHECKPOINT" | "PENDING";
   accountId?: string;
   checkpoint?: string;
 }
@@ -87,7 +87,12 @@ export function ConnectPage() {
         setCheckpointType(res.checkpoint ?? null);
         setPassword("");
       } else {
-        toast("success", "Conta conectada com sucesso");
+        toast(
+          "success",
+          res.status === "PENDING"
+            ? "Conta conectada! Aguardando aprovação do administrador"
+            : "Conta conectada com sucesso",
+        );
         setUsername("");
         setPassword("");
         setNativeOpen(false);
@@ -114,7 +119,12 @@ export function ConnectPage() {
         setCode("");
         toast("warning", `Verificação adicional solicitada: ${res.checkpoint}`);
       } else {
-        toast("success", "Verificação concluída. Conta conectada!");
+        toast(
+          "success",
+          res.status === "PENDING"
+            ? "Verificação concluída. Conta enviada para aprovação!"
+            : "Verificação concluída. Conta conectada!",
+        );
         setCheckpointAccountId(null);
         setCode("");
         setNativeOpen(false);
@@ -196,30 +206,29 @@ export function ConnectPage() {
         </div>
       )}
 
-      {(!isAdmin && accounts.length > 0) ? null : (
+      {(isAdmin || !accounts.some((a) => a.status !== "REJECTED")) && (
+        <>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {isAdmin && (
-            <button
-              type="button"
-              className="card group p-5 text-left transition-all hover:border-gold-500/40"
-              onClick={() => {
-                if (!unipileConfigured) return;
-                setNativeOpen((v) => !v);
-                setCheckpointAccountId(null);
-              }}
-              disabled={!unipileConfigured}
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-500/10 border border-gold-500/30">
-                  <KeyRound className="h-5 w-5 text-gold-500" />
-                </div>
-                <div>
-                  <h2 className="font-medium text-cream">Login nativo (email e senha)</h2>
-                  <p className="text-xs text-cream/50">Conexão direta com a conta LinkedIn</p>
-                </div>
+          <button
+            type="button"
+            className="card group p-5 text-left transition-all hover:border-gold-500/40 disabled:opacity-40"
+            onClick={() => {
+              if (!unipileConfigured) return;
+              setNativeOpen((v) => !v);
+              setCheckpointAccountId(null);
+            }}
+            disabled={!unipileConfigured}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-500/10 border border-gold-500/30">
+                <KeyRound className="h-5 w-5 text-gold-500" />
               </div>
-            </button>
-          )}
+              <div>
+                <h2 className="font-medium text-cream">Login nativo (email e senha)</h2>
+                <p className="text-xs text-cream/50">Conexão direta com a conta LinkedIn</p>
+              </div>
+            </div>
+          </button>
 
           <button
             type="button"
@@ -240,6 +249,13 @@ export function ConnectPage() {
             </div>
           </button>
         </div>
+        {!isAdmin && (
+          <p className="mt-3 text-xs text-cream/40">
+            Conexões de usuários passam pela aprovação do administrador antes de serem usadas nas
+            campanhas.
+          </p>
+        )}
+        </>
       )}
 
       {nativeOpen && unipileConfigured && (
