@@ -17,6 +17,7 @@ export interface PublicUser {
   name: string;
   role: string;
   status: string;
+  pro: boolean;
 }
 
 export async function ensureAdminSeeded(): Promise<void> {
@@ -29,8 +30,8 @@ export async function ensureAdminSeeded(): Promise<void> {
   });
 }
 
-function toPublic(u: { id: string; username: string; name: string; role: string; status: string }): PublicUser {
-  return { id: u.id, username: u.username, name: u.name, role: u.role, status: u.status };
+function toPublic(u: { id: string; username: string; name: string; role: string; status: string; pro: boolean }): PublicUser {
+  return { id: u.id, username: u.username, name: u.name, role: u.role, status: u.status, pro: u.pro === true };
 }
 
 export async function loginUser(
@@ -56,6 +57,7 @@ export async function registerUser(input: {
   username: string;
   password: string;
   whatsapp?: string;
+  pro?: boolean;
 }): Promise<PublicUser> {
   const existing = await prisma.user.findUnique({ where: { username: input.username } });
   if (existing) throw new ApiError(409, "Este usuário já está cadastrado.");
@@ -68,6 +70,7 @@ export async function registerUser(input: {
       whatsapp: input.whatsapp || null,
       role: "USER",
       status: "PENDING",
+      pro: input.pro ?? false,
     },
   });
   return toPublic(user);
@@ -78,6 +81,7 @@ export async function createUser(input: {
   username: string;
   password: string;
   whatsapp?: string;
+  pro?: boolean;
 }): Promise<PublicUser> {
   const existing = await prisma.user.findUnique({ where: { username: input.username } });
   if (existing) throw new ApiError(409, "Este usuário já está cadastrado.");
@@ -90,6 +94,7 @@ export async function createUser(input: {
       whatsapp: input.whatsapp || null,
       role: "USER",
       status: "ACTIVE",
+      pro: input.pro ?? false,
     },
   });
   return toPublic(user);
@@ -126,6 +131,7 @@ export async function listUsers(): Promise<(PublicUser & { whatsapp: string | nu
       name: true,
       role: true,
       status: true,
+      pro: true,
       whatsapp: true,
       createdAt: true,
       _count: { select: { accounts: true, campaigns: true } },
@@ -175,4 +181,22 @@ export async function resetUserPassword(id: string, newPassword: string): Promis
   if (!user) throw new ApiError(404, "Usuário não encontrado");
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({ where: { id }, data: { passwordHash } });
+}
+
+export async function setUserPro(id: string, pro: boolean): Promise<PublicUser> {
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) throw new ApiError(404, "Usuário não encontrado");
+  const updated = await prisma.user.update({ where: { id }, data: { pro } });
+  return toPublic(updated);
+}
+
+export async function userHasAI(userId: string | null): Promise<boolean> {
+  if (!userId) return true;
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, pro: true, status: true },
+  });
+  if (!u) return true;
+  if (u.role === "ADMIN") return true;
+  return u.pro === true && u.status === "ACTIVE";
 }

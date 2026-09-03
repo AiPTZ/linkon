@@ -14,7 +14,7 @@ vi.mock("../lib/prisma", () => ({
 }));
 
 import { prisma } from "../lib/prisma";
-import { loginUser, registerUser, createUser, changePassword, approveUser, blockUser } from "./user.service";
+import { loginUser, registerUser, createUser, changePassword, approveUser, blockUser, setUserPro, userHasAI } from "./user.service";
 import { ApiError } from "../utils/errors";
 
 const userFind = prisma.user.findUnique as ReturnType<typeof vi.fn>;
@@ -22,7 +22,7 @@ const userCreate = prisma.user.create as ReturnType<typeof vi.fn>;
 const userUpdate = prisma.user.update as ReturnType<typeof vi.fn>;
 const campaignUpdateMany = prisma.campaign.updateMany as ReturnType<typeof vi.fn>;
 
-const baseUser = { id: "U1", name: "Fulano", username: "fulano", passwordHash: "$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", whatsapp: "5511999999999", role: "USER", status: "ACTIVE", createdAt: new Date(), updatedAt: new Date() };
+const baseUser = { id: "U1", name: "Fulano", username: "fulano", passwordHash: "$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", whatsapp: "5511999999999", role: "USER", status: "ACTIVE", pro: false, createdAt: new Date(), updatedAt: new Date() };
 
 describe("loginUser", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -78,6 +78,59 @@ describe("createUser", () => {
   it("rejeita username duplicado", async () => {
     userFind.mockResolvedValue(baseUser);
     await expect(createUser({ name: "Novo", username: "fulano", password: "senha123" })).rejects.toThrow(ApiError);
+  });
+});
+
+describe("setUserPro", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("grava pro=true quando usuário existe", async () => {
+    userFind.mockResolvedValue({ ...baseUser, pro: false });
+    userUpdate.mockResolvedValue({ ...baseUser, pro: true });
+    const out = await setUserPro("U1", true);
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "U1" },
+      data: { pro: true },
+    });
+    expect(out.pro).toBe(true);
+  });
+
+  it("lança 404 quando usuário não existe", async () => {
+    userFind.mockResolvedValue(null);
+    await expect(setUserPro("X", true)).rejects.toThrow("Usuário não encontrado");
+  });
+});
+
+describe("userHasAI", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("permite id nulo (conta global)", async () => {
+    expect(await userHasAI(null)).toBe(true);
+  });
+
+  it("permite ADMIN", async () => {
+    userFind.mockResolvedValue({ ...baseUser, role: "ADMIN", pro: false });
+    expect(await userHasAI("U1")).toBe(true);
+  });
+
+  it("permite USER com pro ativo", async () => {
+    userFind.mockResolvedValue({ ...baseUser, role: "USER", pro: true });
+    expect(await userHasAI("U1")).toBe(true);
+  });
+
+  it("bloqueia USER sem pro", async () => {
+    userFind.mockResolvedValue({ ...baseUser, role: "USER", pro: false });
+    expect(await userHasAI("U1")).toBe(false);
+  });
+
+  it("bloqueia USER com pro mas status BLOCKED", async () => {
+    userFind.mockResolvedValue({ ...baseUser, role: "USER", pro: true, status: "BLOCKED" });
+    expect(await userHasAI("U1")).toBe(false);
+  });
+
+  it("permite quando usuário não existe mais", async () => {
+    userFind.mockResolvedValue(null);
+    expect(await userHasAI("X")).toBe(true);
   });
 });
 
