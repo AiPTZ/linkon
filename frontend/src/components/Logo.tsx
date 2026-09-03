@@ -1,9 +1,16 @@
+const HEIGHTS: Record<"sm" | "md" | "lg", string> = {
+  sm: "h-7",
+  md: "h-9",
+  lg: "h-12",
+};
+
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const text = size === "lg" ? "text-3xl" : size === "sm" ? "text-lg" : "text-2xl";
   return (
-    <div className="flex select-none items-baseline">
-      <span className={`font-serif font-semibold tracking-tight text-cream ${text}`}>Link</span>
-      <span className={`font-serif font-bold italic gold-gradient-text ${text}`}>ON</span>
-    </div>
+    <img
+      src="/logos/linkon-logo.png"
+      alt="Link ON"
+      draggable={false}
+      className={`${HEIGHTS[size]} w-auto select-none object-contain`}
+    />
   );
 }
