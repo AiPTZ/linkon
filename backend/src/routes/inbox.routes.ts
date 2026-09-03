@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveScope } from "../utils/scope";
 import { listInbox, listMessages, sendHumanMessage, claimConversation, reactivateConversation, markConversationRead, updateConversation, suggestReply } from "../services/inbox.service";
 import { ApiError } from "../utils/errors";
+import { requirePro } from "../middleware/auth";
 import { ah } from "./handler";
 
 export const inboxRouter = Router();
@@ -88,6 +89,7 @@ const suggestSchema = z.object({ text: z.string().max(3000).optional() });
 
 inboxRouter.post(
   "/:id/suggest-reply",
+  requirePro,
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
     const { text } = suggestSchema.parse(req.body);

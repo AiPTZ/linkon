@@ -6,11 +6,14 @@ import { env } from "../config/env";
 import { encrypt } from "../utils/crypto";
 import { ApiError } from "../utils/errors";
 import { resolveScope } from "../utils/scope";
+import { requirePro } from "../middleware/auth";
 import { buildOAuthUrl, exchangeCodeForTokens } from "../services/calendar.service";
 import { parseWindowsInput } from "../services/scheduling.service";
 import { ah } from "./handler";
 
 export const calendarRouter = Router();
+
+calendarRouter.use(requirePro);
 
 function oauthConfigured(): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REDIRECT_URI);

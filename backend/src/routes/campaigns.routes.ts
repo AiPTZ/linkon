@@ -3,7 +3,8 @@ import type { Request } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { resolveScope, assertAccountInScope } from "../utils/scope";
+import { resolveScope, assertAccountInScope, currentUser } from "../utils/scope";
+import { userHasAI } from "../services/user.service";
 import { importBroadcastLeads, setLeadSelection } from "../services/broadcast.service";
 import {
   buildLeadsXlsx,
@@ -276,6 +277,15 @@ campaignsRouter.put(
       throw new ApiError(400, "Cadência só é válida no modo disparo");
     }
     const data = toData(body);
+    if (data.agentEnabled === true) {
+      const actor = currentUser(req);
+      if (actor.role !== "ADMIN") {
+        const allowed = await userHasAI(actor.sub);
+        if (!allowed) {
+          throw new ApiError(403, "O bot com IA é um recurso da Versão PRO. Fale com o administrador para liberar.");
+        }
+      }
+    }
     if (data.accountId) {
       const account = await prisma.account.findUnique({ where: { id: data.accountId as string } });
       if (!account) throw new ApiError(400, "Conta vinculada não encontrada");

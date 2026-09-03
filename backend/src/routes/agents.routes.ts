@@ -2,10 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { resolveScope, assertAccountInScope } from "../utils/scope";
+import { requirePro } from "../middleware/auth";
 import { ApiError } from "../utils/errors";
 import { ah } from "./handler";
 
 export const agentsRouter = Router();
+
+agentsRouter.use(requirePro);
 
 const knowledgeBaseSchema = z.object({
   product: z.string().max(3000).default(""),
