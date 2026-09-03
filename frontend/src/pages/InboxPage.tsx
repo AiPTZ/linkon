@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { ConversationMessage, ConversationSummary, InboxListResponse, MessagePage, SuggestReplyResponse } from "../types";
 import { PageLoader } from "../components/Spinner";
 import { useToast, toastFromError } from "../components/Toast";
 import { InboxList, type InboxFilter } from "../components/inbox/InboxList";
 import { InboxChat } from "../components/inbox/InboxChat";
 import { LeadContextPanel } from "../components/inbox/LeadContextPanel";
+import { isPro } from "../components/ProLock";
 
 const REFRESH_MS = 8_000;
 const PAGE_SIZE = 50;
 
 export function InboxPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const aiAllowed = isPro(user);
   const [inbox, setInbox] = useState<InboxListResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[] | null>(null);
@@ -283,6 +287,7 @@ export function InboxPage() {
           onSuggest={onSuggest}
           onDiscardSuggestion={onDiscardSuggestion}
           onOpenProfile={onOpenProfile}
+          aiAllowed={aiAllowed}
         />
 
         <div className="max-h-[70vh] overflow-y-auto">

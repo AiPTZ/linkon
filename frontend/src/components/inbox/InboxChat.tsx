@@ -23,6 +23,7 @@ export interface InboxChatProps {
   onSuggest: () => void;
   onDiscardSuggestion: () => void;
   onOpenProfile: () => void;
+  aiAllowed: boolean;
 }
 
 export function InboxChat({
@@ -43,6 +44,7 @@ export function InboxChat({
   onSuggest,
   onDiscardSuggestion,
   onOpenProfile,
+  aiAllowed,
 }: InboxChatProps) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -151,7 +153,7 @@ export function InboxChat({
               {claiming ? <Spinner className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
               Assumir
             </button>
-          ) : (
+          ) : aiAllowed ? (
             <button
               type="button"
               onClick={onReactivate}
@@ -161,7 +163,7 @@ export function InboxChat({
               {reactivating ? <Spinner className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
               Reativar IA
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -226,15 +228,17 @@ export function InboxChat({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKeyDown}
           />
-          <button
-            type="button"
-            onClick={onSuggest}
-            disabled={suggesting}
-            title="Sugerir resposta com IA"
-            className="btn btn-secondary"
-          >
-            {suggesting ? <Spinner className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-          </button>
+          {aiAllowed && (
+            <button
+              type="button"
+              onClick={onSuggest}
+              disabled={suggesting}
+              title="Sugerir resposta com IA"
+              className="btn btn-secondary"
+            >
+              {suggesting ? <Spinner className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+            </button>
+          )}
           <button type="submit" className="btn btn-primary" disabled={sending || !draft.trim()}>
             {sending ? <Spinner className="h-4 w-4" /> : <Send className="h-4 w-4" />}
           </button>

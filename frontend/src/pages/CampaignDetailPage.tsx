@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Bot,
   CheckCheck,
+  Crown,
   Download,
   ExternalLink,
   FileSpreadsheet,
@@ -23,6 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { Campaign, ContactScrapeStats, Lead, LogEvent, Paginated } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
 import { StatCard } from "../components/StatCard";
@@ -32,6 +34,7 @@ import { formatDateTime, LEAD_STATUS_LABEL, shortName } from "../lib/format";
 import { BLOCK_DEFS, parseFlow } from "../lib/flow";
 import { formatCountdown } from "../components/NextSendCountdown";
 import { useToast, toastFromError } from "../components/Toast";
+import { isPro, proWhatsAppUrl } from "../components/ProLock";
 
 type Tab = "leads" | "logs";
 
@@ -65,6 +68,8 @@ export function CampaignDetailPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const aiAllowed = isPro(user);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [tab, setTab] = useState<Tab>("leads");
 
@@ -432,23 +437,35 @@ export function CampaignDetailPage() {
         <span className="inline-flex items-center gap-2 text-cream/70">
           <Bot className="h-4 w-4 text-gold-500" />
           Bot com IA
-          <button
-            type="button"
-            role="switch"
-            aria-checked={campaign.agentEnabled}
-            disabled={busy !== null}
-            onClick={onToggleAgent}
-            title={campaign.agentEnabled ? "Desativar o bot nesta campanha" : "Ativar o bot nesta campanha"}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/50 disabled:opacity-50 ${
-              campaign.agentEnabled ? "bg-gold-500" : "bg-ink-500"
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                campaign.agentEnabled ? "translate-x-4" : "translate-x-0.5"
+          {aiAllowed ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={campaign.agentEnabled}
+              disabled={busy !== null}
+              onClick={onToggleAgent}
+              title={campaign.agentEnabled ? "Desativar o bot nesta campanha" : "Ativar o bot nesta campanha"}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/50 disabled:opacity-50 ${
+                campaign.agentEnabled ? "bg-gold-500" : "bg-ink-500"
               }`}
-            />
-          </button>
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  campaign.agentEnabled ? "translate-x-4" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          ) : (
+            <a
+              href={proWhatsAppUrl("Olá! Quero contratar a Versão PRO do Link ON.")}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Bot com IA disponível na Versão PRO"
+              className="inline-flex items-center gap-1 rounded-full border border-gold-500/40 bg-gold-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gold-400 transition-colors hover:bg-gold-500/20"
+            >
+              <Crown className="h-3 w-3" /> PRO
+            </a>
+          )}
         </span>
         {campaign.mode === "DISPARO" ? (
           <span className="inline-flex items-center gap-1.5 text-cream/70">

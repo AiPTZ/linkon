@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Bot, Save, Zap } from "lucide-react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { useToast, toastFromError } from "../components/Toast";
 import { Spinner, PageLoader } from "../components/Spinner";
+import { ProLock, isPro } from "../components/ProLock";
 import {
   AgentConfigSection,
   defaultAgentConfig,
@@ -19,10 +21,16 @@ interface Row {
 
 export function AgentNativoPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const aiAllowed = isPro(user);
   const [rows, setRows] = useState<Row[] | null>(null);
 
   useEffect(() => {
     (async () => {
+      if (!aiAllowed) {
+        setRows([]);
+        return;
+      }
       try {
         const items = await api.get<AgentAccountListItem[]>("/agents");
         setRows(
@@ -55,7 +63,21 @@ export function AgentNativoPage() {
         setRows([]);
       }
     })();
-  }, [toast]);
+  }, [toast, aiAllowed]);
+
+  if (!aiAllowed) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="font-serif text-3xl font-semibold gold-gradient-text">Agente nativo</h1>
+          <p className="mt-1 text-sm text-cream/50">
+            Configuração do assistente de IA que responde automaticamente no LinkedIn.
+          </p>
+        </div>
+        <ProLock description="O Agente Nativo responde automaticamente às mensagens recebidas usando IA. Disponível na Versão PRO." />
+      </div>
+    );
+  }
 
   if (rows === null) return <PageLoader />;
 
