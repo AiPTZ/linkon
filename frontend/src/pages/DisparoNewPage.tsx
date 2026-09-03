@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ChevronDown,
+  Crown,
   Loader2,
   MessageSquare,
   Radar,
@@ -11,11 +12,13 @@ import {
   Workflow,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { Account, CadenceStep, CampaignPayload, Flow } from "../types";
 import { FlowEditor } from "../components/FlowEditor";
 import { emptyFlow } from "../lib/flow";
 import { PageLoader } from "../components/Spinner";
 import { useToast, toastFromError } from "../components/Toast";
+import { isPro, proWhatsAppUrl } from "../components/ProLock";
 
 const DEFAULT_MESSAGE =
   "Olá {nome}! Vi que já somos conectados aqui no LinkedIn e queria compartilhar uma oportunidade que pode ser interessante para você.";
@@ -23,6 +26,8 @@ const DEFAULT_MESSAGE =
 export function DisparoNewPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const aiAllowed = isPro(user);
 
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [accountId, setAccountId] = useState("");
@@ -109,7 +114,7 @@ export function DisparoNewPage() {
         workStartHour: strategy.workStartHour,
         workEndHour: strategy.workEndHour,
         maxLeads: strategy.maxLeads,
-        agentEnabled,
+        agentEnabled: aiAllowed ? agentEnabled : false,
         flow: useFlow ? flow : undefined,
       };
       const created = await api.post<{ id: string }>("/campaigns", payload);
@@ -281,25 +286,49 @@ export function DisparoNewPage() {
 
         <section className="card p-5">
           <h2 className="font-serif text-lg text-gold-400">Bot com IA nesta campanha</h2>
-          <label className="mt-3 flex items-start gap-3 text-sm text-cream/70">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-gold-500"
-              checked={agentEnabled}
-              onChange={(e) => setAgentEnabled(e.target.checked)}
-              aria-label="Responder automaticamente às respostas dos contatos"
-            />
-            <span>
-              <span className="font-medium text-cream">
-                Responder automaticamente às respostas dos contatos
+          {aiAllowed ? (
+            <label className="mt-3 flex items-start gap-3 text-sm text-cream/70">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-gold-500"
+                checked={agentEnabled}
+                onChange={(e) => setAgentEnabled(e.target.checked)}
+                aria-label="Responder automaticamente às respostas dos contatos"
+              />
+              <span>
+                <span className="font-medium text-cream">
+                  Responder automaticamente às respostas dos contatos
+                </span>
+                <span className="mt-0.5 block text-xs text-cream/40">
+                  Quando desligado, as respostas dos contatos desta campanha são apenas registradas no
+                  Inbox (sem resposta automática do bot e sem transferência para humano). O agente da
+                  conta continua disponível em "Agente nativo".
+                </span>
               </span>
-              <span className="mt-0.5 block text-xs text-cream/40">
-                Quando desligado, as respostas dos contatos desta campanha são apenas registradas no
-                Inbox (sem resposta automática do bot e sem transferência para humano). O agente da
-                conta continua disponível em "Agente nativo".
+            </label>
+          ) : (
+            <div className="mt-3 flex items-start gap-3 text-sm text-cream/70">
+              <a
+                href={proWhatsAppUrl("Olá! Quero contratar a Versão PRO do Link ON.")}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Bot com IA disponível na Versão PRO"
+                className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-gold-500/40 bg-gold-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gold-400 transition-colors hover:bg-gold-500/20"
+              >
+                <Crown className="h-3 w-3" /> PRO
+              </a>
+              <span>
+                <span className="font-medium text-cream">
+                  Responder automaticamente às respostas dos contatos
+                </span>
+                <span className="mt-0.5 block text-xs text-cream/40">
+                  As respostas dos contatos desta campanha são apenas registradas no Inbox (sem
+                  resposta automática do bot e sem transferência para humano). Disponível na Versão
+                  PRO.
+                </span>
               </span>
-            </span>
-          </label>
+            </div>
+          )}
         </section>
 
         <section className="card">
