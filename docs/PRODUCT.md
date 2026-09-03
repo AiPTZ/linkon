@@ -8,11 +8,12 @@ contatos da rede, com ritmo controlado para parecer humano e reduzir risco de bl
 
 ## Personas
 
-- **Vendedor/BDM**: conecta a própria conta LinkedIn, cria campanhas de convite com mensagem
-  personalizada, acompanha leads e respostas, extrai contatos de perfis.
-- **Administrador (ADMIN)**: gerencia usuários (aprovar/bloquear/redefinir senha), configura a
-  integração Unipile, acompanha a saúde do sistema (Redis, filas), desconecta contas e opera na base
-  global de todos os usuários.
+- **Vendedor/BDM**: conecta a própria conta LinkedIn (limite de 1 conta por usuário; a conexão passa
+  pela aprovação do administrador antes de ser usada), cria campanhas de convite e disparos de
+  mensagens, acompanha leads e respostas no Inbox e extrai contatos de perfis.
+- **Administrador (ADMIN)**: gerencia usuários (aprovar/bloquear/redefinir senha/liberar PRO), configura
+  a integração Unipile (credenciais e webhooks), aprova contas LinkedIn de usuários, acompanha a saúde
+  do sistema (Redis, filas), desconecta contas e opera na base global de todos os usuários.
 
 ## Funcionalidades por área
 
@@ -26,12 +27,20 @@ contatos da rede, com ritmo controlado para parecer humano e reduzir risco de bl
 
 ### Contas LinkedIn
 
-- Conexão por **login nativo** (usuário/senha) com tratamento de **checkpoint/2FA** (código resolvido
-  via `POST /api/auth/native/checkpoint`).
-- Conexão por **auth hospedada** (fluxo `hosted` da Unipile) — fluxo recomendado para usuários comuns.
-- Confirmação de conexão hospedada via `POST /api/accounts/confirm-hosted`.
-- Status da conta (`CONNECTING`, `OK`, `CHECKPOINT`, `PENDING_LINKEDIN`, `REJECTED`, `DISCONNECTED`) e
-  aprovação manual pelo admin para contas nativas em `PENDING_LINKEDIN`.
+- Conexão por **login nativo** (usuário/senha) para qualquer usuário autenticado, com tratamento de
+  **checkpoint/2FA** (código resolvido via `POST /api/auth/native/checkpoint`). Usuários comuns
+  conectam a própria conta (limite de 1, `assertCanConnectLinkedIn`) e ela nasce `PENDING_LINKEDIN`
+  para aprovação do admin; administradores conectam direto (`OK`) e podem atribuir a um usuário via
+  `userId`.
+- Conexão por **auth hospedada** (fluxo `hosted` da Unipile) — fluxo recomendado para usuários comuns;
+  a confirmação via `POST /api/accounts/confirm-hosted` cria a conta em `PENDING_LINKEDIN` quando há
+  um usuário no escopo.
+- Status da conta (`CONNECTING`, `OK`, `CHECKPOINT`, `PENDING_LINKEDIN`, `REJECTED`, `DISCONNECTED`).
+  Contas de usuários em `PENDING_LINKEDIN` (nativas ou hospedadas) são aprovadas/rejeitadas pelo admin
+  em Administração → Contas LinkedIn; aprovar muda para `OK` e dispara a sincronização da rede.
+- A integração Unipile (DSN, Access Token e URL do webhook) é configurada **somente pelo admin**, em
+  Administração → Integração Unipile; webhooks são registrados na seção "Webhooks da Unipile" da
+  página Conta LinkedIn (admin).
 - Listagem de relações da conta (preview da rede) com limite configurável.
 
 ### Campanhas
@@ -54,11 +63,15 @@ Quando o limite semanal é atingido, a campanha é pausada com status `LIMIT_HIT
   sequência de blocos por lead.
 - O avanço de etapa também é disparado por eventos de webhook (mensagem recebida, relação aceita).
 
-### Chatbot por regras
+### Agente de IA e respostas automáticas
 
-- Por campanha: regras `contains`/`keywords`/`regex`, resposta padrão, palavras de parada e limite de
-  respostas por lead (`maxRepliesPerLead`).
-- Ativação via webhook `message_received`; a resposta é enfileirada com atraso aleatório.
+- Assistente de IA (**Versão PRO** — admin ou usuário com `pro: true`) configurável por conta na página
+  **Agente nativo** e ligável/desligável por campanha (`agentEnabled`).
+- Configuração: tom da resposta, atraso de resposta, limites de respostas por dia/semana e por lead
+  (`maxTurns`), mensagem de transferência para humano e agendamento de disponibilidade (com integração
+  de Google Agenda).
+- Ativação via webhook `message_received` quando `aiAllowed && agent.enabled && !locked`; a resposta é
+  enfileirada com atraso aleatório. Conversas que precisam de humano aparecem no **Inbox**.
 
 ### Banco de contatos
 
@@ -101,7 +114,7 @@ Ver tabela no [README](../README.md#contas-demo). Resumo:
 | Conexão hospedada | Implementado |
 | Campanhas SEARCH / SWEEP / DISPARO | Implementado |
 | Fluxos visuais de mensagens | Implementado |
-| Chatbot por regras | Implementado |
+| Agente de IA + Inbox (Versão PRO) | Implementado |
 | Banco de contatos com exportação XLSX | Implementado |
 | Notificações e logs | Implementado |
 | Painel administrativo | Implementado |

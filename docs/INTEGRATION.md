@@ -16,15 +16,17 @@ em operações que usam `configService`):
    - `UNIPILE_ACCESS_TOKEN` — token de acesso da instância.
    - `UNIPILE_WEBHOOK_SECRET` — segredo compartilhado para validar webhooks (mínimo 8 caracteres).
    - `WEBHOOK_PUBLIC_URL` — URL pública do backend para registro de webhooks.
-2. Painel (**Configurações → PUT /api/config**): `unipileDsn`, `unipileAccessToken`,
-   `webhookPublicUrl` — gravados na tabela `AppConfig`.
+2. Painel (**Administração → Integração Unipile → `PUT /api/config`**, somente admin):
+   `unipileDsn`, `unipileAccessToken`, `webhookPublicUrl` — gravados na tabela `AppConfig`.
 
 O `GET /api/config` expõe apenas *se* estão configurados (`unipileDsnConfigured`, etc.), nunca o valor.
 
 ### Autenticação de contas LinkedIn
 
-- **Login nativo** (`POST /api/auth/native`, admin): envia usuário/senha para a Unipile. Em caso de
-  checkpoint/2FA, retorna `202` e o código é resolvido em `POST /api/auth/native/checkpoint`.
+- **Login nativo** (`POST /api/auth/native`, qualquer usuário autenticado): envia usuário/senha para a
+  Unipile. Usuários comuns conectam a própria conta (limite de 1) e ela nasce `PENDING_LINKEDIN` para
+  aprovação do admin; admin conecta direto (`OK`). Em caso de checkpoint/2FA, retorna `202` e o código
+  é resolvido em `POST /api/auth/native/checkpoint`.
 - **Auth hospedada** (`POST /api/auth/hosted`): gera uma URL da Unipile; após o fluxo, o usuário
   confirma em `POST /api/accounts/confirm-hosted`.
 - `GET /api/accounts` sincroniza as contas com a Unipile (`syncAccounts`); se a Unipile não estiver
@@ -36,8 +38,8 @@ O `GET /api/config` expõe apenas *se* estão configurados (`unipileDsnConfigure
   `/api/webhooks/unipile` na Unipile.
 - Assinatura: cada requisição deve enviar o header `unipile-auth` (ou `authorization`) igual a
   `UNIPILE_WEBHOOK_SECRET`; caso contrário `401`.
-- Eventos: `message_received` (atualiza lead, avança fluxo, dispara chatbot) e `new_relation`
-  (marca lead `ACCEPTED`).
+- Eventos: `message_received` (atualiza lead, avança fluxo, dispara resposta do bot de IA quando
+  habilitado) e `new_relation` (marca lead `ACCEPTED`).
 - Registros de webhooks são persistidos em `WebhookRegistration` e listados em `GET /api/config`.
 
 ## Redis

@@ -27,13 +27,13 @@ import { Logo } from "../components/Logo";
 const FEATURES = [
   {
     icon: UserPlus,
-    title: "Convites em escala, com toque humano",
-    desc: "Envia convites de conexão com mensagens personalizadas de até 300 caracteres, respeitando a identidade da sua marca.",
+    title: "Convites e disparos em escala",
+    desc: "Envia convites personalizados para buscas salvas do LinkedIn e mensagens em massa para a sua rede — até 300 caracteres, com a identidade da sua marca.",
   },
   {
     icon: Clock3,
     title: "Comportamento humano",
-    desc: "Atrasos aleatórios entre convites (5–15 min), pausas nos fins de semana, janela de horário comercial e limites diários e semanais.",
+    desc: "Atrasos aleatórios entre envios (padrão de 5 a 15 min), janela de horário comercial e limites diários e semanais configuráveis por campanha.",
   },
   {
     icon: Zap,
@@ -42,8 +42,8 @@ const FEATURES = [
   },
   {
     icon: Bot,
-    title: "Agente de resposta automática",
-    desc: "Regras de palavras-chave respondem automaticamente os contatos que aceitam seu convite, sem intervenção manual.",
+    title: "Bot de IA para respostas",
+    desc: "Na Versão PRO, o bot com IA responde automaticamente quem aceita ou responde, com fluxo visual e transferência para um humano no Inbox.",
   },
   {
     icon: ShieldCheck,
@@ -53,34 +53,34 @@ const FEATURES = [
   {
     icon: BarChart3,
     title: "Painel completo",
-    desc: "Leads com status, aceites e respostas, logs de todas as ações e visão geral de saúde do sistema em um só lugar.",
+    desc: "Leads com status, aceites e respostas, contatos com e-mail e telefone exportáveis, logs de todas as ações e saúde do sistema em um só lugar.",
   },
 ];
 
 const STEPS = [
   {
-    title: "Configure sua instância Unipile",
-    desc: "O administrador informa o DSN e o Access Token da Unipile no painel Administração. É a ponte entre o Link ON e o LinkedIn.",
+    title: "Administrador configura a Unipile",
+    desc: "Em Administração → Integração Unipile, o admin informa o DSN, o Access Token e a URL do webhook e registra os webhooks. Usuários não precisam de credenciais.",
   },
   {
-    title: "Conecte sua conta LinkedIn",
-    desc: "Em Contas LinkedIn, conecte pelo assistente de autenticação (recomendado) ou por login nativo, com suporte a checkpoints e 2FA.",
+    title: "Conecte sua conta do LinkedIn",
+    desc: "Na página Conta LinkedIn, conecte pelo login nativo (e-mail e senha) ou pelo Assistente. Contas de usuários passam por aprovação do administrador antes de entrar em campanhas.",
   },
   {
-    title: "Crie a campanha com a busca salva",
-    desc: "No LinkedIn, monte uma busca (pessoas) e copie a URL. Cole na campanha: a automação busca os perfis automaticamente.",
+    title: "Crie a campanha de convites",
+    desc: "No LinkedIn, monte uma busca de pessoas (normal ou Sales Navigator), salve e copie a URL. Cole na campanha: a automação importa os perfis e envia o convite com a sua mensagem.",
   },
   {
-    title: "Configure mensagem e limites",
-    desc: "Escreva o convite personalizado, defina a janela de horário, atrasos e os limites diários/semanais de envio.",
+    title: "Crie o disparo para a sua rede",
+    desc: "Para falar com quem já é seu contato, crie um disparo com mensagem personalizada e cadência de acompanhamento opcional. No passo seguinte você escolhe os destinatários.",
   },
   {
-    title: "Ative o agente (opcional)",
-    desc: "Crie regras de palavras-chave e respostas. Quem aceitar e responder fora do seu horário é atendido automaticamente.",
+    title: "Ajuste ritmo e limites",
+    desc: "Defina limites diários/semanais, o atraso entre envios e a janela comercial. Ative o fluxo visual ou o bot de IA (PRO) para automatizar as respostas.",
   },
   {
     title: "Inicie e acompanhe",
-    desc: "Pressione Iniciar. Acompanhe convites enviados, pendentes, aceites e respostas, além dos logs de cada ação.",
+    desc: "Varra a rede e selecione os contatos no disparo, ou deixe a campanha importar a busca. Acompanhe aceites e respostas em tempo real e exporte contatos com e-mail e telefone.",
   },
 ];
 
@@ -88,7 +88,7 @@ const TIPS = [
   "Use LinkedIn Premium ou Sales Navigator para mais resultados e menor risco de restrições.",
   "Respeite os limites: 40 convites/dia e 150/semana por conta (recomendação do LinkedIn).",
   "Envie convites apenas para perfis realmente relevantes à sua oferta.",
-  "Registre os webhooks para ativar a detecção automática de aceites e respostas.",
+  "O administrador registra os webhooks para ativar a detecção automática de aceites e respostas.",
 ];
 
 export function LandingPage() {
@@ -190,7 +190,8 @@ export function LandingPage() {
               Como operar em 6 passos
             </h2>
             <p className="mt-4 text-cream/55">
-              Da configuração da Unipile à primeira campanha rodando. Aproximadamente 10 minutos.
+              Da integração da Unipile (feita pelo administrador) ao primeiro envio — em poucos
+              minutos.
             </p>
           </div>
 

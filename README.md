@@ -3,16 +3,17 @@
 Plataforma de automação de prospecção no LinkedIn via [Unipile](https://developer.unipile.com).
 
 O LinkON envia convites personalizados com comportamento humano (atrasos aleatórios, limites diários e
-semanais, janela de horário comercial), responde automaticamente a mensagens com um chatbot por regras
-ou fluxos visuais, varre redes de contatos (sweep), faz disparos em massa para uma seleção de leads e
-extrai dados de perfis com exportação para planilha.
+semanais, janela de horário comercial), responde automaticamente a mensagens com um bot de IA (Versão
+PRO) e fluxos visuais, varre redes de contatos (sweep), faz disparos em massa para uma seleção de leads
+e extrai dados de perfis com exportação para planilha.
 
 ## Recursos
 
 - Autenticação por usuário (JWT) com papéis **USER** e **ADMIN** e escopo de dados por usuário.
 - Conexão de contas LinkedIn via **login nativo** (com suporte a checkpoints/2FA) ou **auth hospedada**.
 - Campanhas em 3 modos: **SEARCH** (busca salva do LinkedIn), **SWEEP** (varredura da rede) e **DISPARO** (envio para leads selecionados).
-- Fluxos de mensagens visuais (editor de fluxo com blocos) e **chatbot por regras** com resposta automática.
+- Fluxos de mensagens visuais (editor de fluxo com blocos) e respostas automáticas por **bot de IA**
+  (Versão PRO), ligável/desligável por campanha.
 - Extração de dados de perfis (emails, telefones, links) com exportação `.xlsx`.
 - Painel de administração: saúde do sistema, filas, contas, usuários (aprovar/bloquear/redefinir senha).
 - Agente de IA por conta (limites, delay, transferência) com bot ligável/desligável por campanha.
@@ -73,11 +74,18 @@ npm run dev:contacts-worker -w @linkon/backend
 
 1. O usuário administrador é criado automaticamente no primeiro boot a partir de `ADMIN_USERNAME` e
    `ADMIN_PASSWORD` no `backend/.env` (senha armazenada como hash bcrypt).
-2. Abra **Configurações** no painel e informe o **DSN** e o **Access Token** da sua instância Unipile
-   (também podem vir de `UNIPILE_DSN` e `UNIPILE_ACCESS_TOKEN` no `.env`).
-3. Em **Contas LinkedIn**, conecte uma conta pelo *assistente* (recomendado) ou por *login nativo*.
-4. Defina a **URL pública do webhook** (`WEBHOOK_PUBLIC_URL`) e registre os webhooks em Configurações.
-5. Em **Campanhas**, cole a URL de uma busca salva do LinkedIn, configure limites e inicie.
+2. No painel, o administrador abre **Administração → Integração Unipile** e informa o **DSN**, o
+   **Access Token** e a **URL pública do webhook** da sua instância Unipile (também podem vir de
+   `UNIPILE_DSN`, `UNIPILE_ACCESS_TOKEN` e `WEBHOOK_PUBLIC_URL` no `.env`). Essa integração é
+   exclusiva do administrador — usuários comuns não veem nem editam as credenciais.
+3. Registre os webhooks na seção **Webhooks da Unipile** da página **Conta LinkedIn** (somente admin).
+4. Conecte contas LinkedIn em **Conta LinkedIn** (login nativo ou *assistente*). O administrador
+   conecta quantas contas precisar e usa na hora; usuários comuns conectam a própria conta (limite de
+   1), que fica **Aguardando aprovação** e é liberada em **Administração → Contas LinkedIn** antes de
+   ser usada em campanhas.
+5. Crie a prospecção: em **Campanhas**, cole a URL de uma busca salva do LinkedIn para enviar
+   convites, ou em **Disparos**, envie mensagens em massa para contatos selecionados da sua rede.
+   Configure mensagem, fluxo, limites e ritmo, e inicie.
 
 ## Contas demo
 

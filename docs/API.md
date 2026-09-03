@@ -235,19 +235,16 @@ Corpo (zod):
   "maxDelayMin": 15,
   "workStartHour": 9,
   "workEndHour": 18,
-  "chatbotEnabled": false,
-  "chatbotRules": [ { "matchType": "contains|keywords|regex", "pattern": "string", "reply": "string" } ],
-  "chatbotDefaultReply": "",
-  "chatbotReplyDelayMin": 1,
-  "chatbotReplyDelayMax": 3,
-  "chatbotStopKeywords": [],
-  "maxRepliesPerLead": 3,
   "maxLeads": 1000,
+  "agentEnabled": true,
   "flow": { "nodes": [], "edges": [] }
 }
 ```
 
-Regras: SWEEP/DISPARO exigem `inviteMessage`, `cadence` ou `flow.nodes` não vazio. `minDelayMin <= maxDelayMin`. `accountId` deve pertencer ao escopo. `cadence` só é aceito em `mode: "DISPARO"` (caso contrário `400`). Na resposta, `cadence` é devolvido como array (persistido como JSON string). Resposta `201` com a campanha criada.
+Regras: `minDelayMin <= maxDelayMin`. `accountId` deve pertencer ao escopo. `cadence` só é aceito em
+`mode: "DISPARO"` (caso contrário `400`). Na resposta, `cadence` é devolvido como array (persistido
+como JSON string). `flow` é validado (`validateFlow`) antes de ser persistido. Resposta `201` com a
+campanha criada.
 
 ### GET /campaigns
 

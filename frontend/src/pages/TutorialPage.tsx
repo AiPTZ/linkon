@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   CheckCircle2,
+  Clock3,
   HelpCircle,
   ListChecks,
   MessageCircle,
@@ -9,7 +10,6 @@ import {
   Send,
   Settings,
   UserPlus,
-  Workflow,
 } from "lucide-react";
 
 interface Step {
@@ -23,42 +23,49 @@ interface Step {
 const STEPS: Step[] = [
   {
     n: 1,
-    title: "Integração com a Unipile (administrador)",
-    text: "O administrador configura a API da Unipile (DSN, Access Token e URL do webhook) no painel Administração. Esse passo é exclusivo do administrador — usuários comuns não precisam de credenciais.",
+    title: "Unipile é configurada pelo administrador",
+    text: "A conexão com o LinkedIn passa pela API da Unipile. O administrador informa o DSN, o Access Token e a URL do webhook em Administração → Integração Unipile e registra os webhooks na página Conta LinkedIn. Usuários comuns não precisam de nenhuma credencial.",
     icon: Settings,
   },
   {
     n: 2,
-    title: "Conecte uma conta do LinkedIn",
-    text: "Em Contas LinkedIn, use o login nativo (e-mail e senha) ou o assistente guiado. Confirme eventuais verificações. Você pode conectar mais de uma conta e usar cada uma em um disparo diferente.",
+    title: "Conecte sua conta do LinkedIn",
+    text: "Na página Conta LinkedIn, use o login nativo (e-mail e senha) ou o Assistente (conexão guiada em nova aba). Usuários comuns têm limite de 1 conta e a conexão fica Aguardando aprovação até o administrador liberar em Administração → Contas LinkedIn. O administrador conecta quantas contas precisar e já usa na hora.",
     action: { to: "/conectar", label: "Conectar conta" },
     icon: UserPlus,
   },
   {
     n: 3,
-    title: "Crie um disparo",
-    text: "Em Disparos, clique em Novo disparo, escolha a conta e escreva a mensagem. Defina limites diário/semanal e a janela de envio para proteger sua conta contra bloqueios.",
-    action: { to: "/disparos/nova", label: "Criar disparo" },
+    title: "Crie uma campanha de convites (busca salva)",
+    text: "A campanha prospecta perfis de uma busca do LinkedIn. Em Nova campanha, cole a URL da busca salva (normal ou Sales Navigator), escolha a conta, escreva o convite e defina a estratégia. Os resultados da busca viram leads automaticamente e recebem convite com a sua mensagem.",
+    action: { to: "/campanhas/nova", label: "Criar campanha" },
     icon: Send,
   },
   {
     n: 4,
-    title: "Varra a rede e selecione os contatos",
-    text: "Na tela de seleção, clique em Varrer rede para importar suas conexões. Marque os contatos que receberão a mensagem e clique em Disparar.",
+    title: "Crie um disparo de mensagens (sua rede)",
+    text: "O disparo envia mensagens em massa para contatos da sua própria rede. Em Novo disparo, escolha a conta, escreva a mensagem (até 300 caracteres, com variáveis como {nome} e {cargo}) e, se quiser, monte uma cadência de acompanhamento com novas mensagens após alguns dias. Você decide para quem enviar no próximo passo.",
+    action: { to: "/disparos/nova", label: "Criar disparo" },
+    icon: MessageCircle,
+  },
+  {
+    n: 5,
+    title: "Ajuste os limites e o ritmo de envio",
+    text: "Na criação, defina o limite diário (recomendado: 40) e semanal (150), o atraso aleatório entre envios (padrão de 5 a 15 minutos) e a janela de horário comercial. Esses controles protegem sua conta contra bloqueios do LinkedIn.",
+    icon: Clock3,
+  },
+  {
+    n: 6,
+    title: "Selecione os destinatários e inicie",
+    text: "No disparo, clique em Varrer rede para importar suas conexões, filtre por nome ou cargo, marque/desmarque quem vai receber e inicie. Na campanha, a importação é automática e os convites entram na fila. O primeiro envio sai na hora; os demais seguem no ritmo configurado.",
     action: { to: "/disparos", label: "Ver disparos" },
     icon: Radar,
   },
   {
-    n: 5,
-    title: "Acompanhe o envio em tempo real",
-    text: "O primeiro contato é enviado na hora e os demais seguem em intervalos de 15 minutos. Na área de exibição você vê apenas os selecionados, na ordem de envio, com status Enviado ao concluir. O sino de notificações avisa quando o disparo termina.",
+    n: 7,
+    title: "Acompanhe e deixe o bot responder (opcional)",
+    text: "O sino de notificações avisa quando um disparo termina ou atinge o limite. Acompanhe os leads (convidado, aceito, respondido), as conversas no Inbox e os contatos extraídos com e-mail e telefone. Na Versão PRO, o bot de IA responde automaticamente quem respondeu — com fluxo visual opcional para montar o funil.",
     icon: Play,
-  },
-  {
-    n: 6,
-    title: "Use fluxo e agente (opcional)",
-    text: "No Fluxo, monte um funil com blocos de mensagem, espera e reação a respostas. Com o agente ativo, o sistema responde automaticamente mensagens recebidas conforme as regras definidas.",
-    icon: Workflow,
   },
 ];
 
@@ -127,7 +134,8 @@ export function TutorialPage() {
           <div>
             <div className="text-sm font-medium text-cream">Status dos envios</div>
             <p className="text-xs text-cream/50">
-              "Enviado" significa que a mensagem saiu; "Respondido" indica quem respondeu.
+              "Enviado" significa que a mensagem saiu; "Aceito" indica quem aceitou o convite e
+              "Respondido", quem respondeu.
             </p>
           </div>
         </div>
