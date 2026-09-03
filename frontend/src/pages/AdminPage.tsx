@@ -3,6 +3,7 @@ import {
   Activity,
   Bot,
   Check,
+  Crown,
   Globe,
   KeyRound,
   Link2,
@@ -84,6 +85,7 @@ export function AdminPage() {
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newWhatsapp, setNewWhatsapp] = useState("");
+  const [newPro, setNewPro] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const loadOverview = useCallback(() => {
@@ -150,6 +152,16 @@ export function AdminPage() {
     }
   }
 
+  async function onTogglePro(user: AdminUser) {
+    try {
+      await api.post(`/admin/users/${user.id}/pro`, { pro: !user.pro });
+      toast("success", user.pro ? "Acesso PRO revogado" : "Versão PRO liberada para o usuário");
+      loadUsers();
+    } catch (err) {
+      toastFromError(toast, err);
+    }
+  }
+
   async function onResetPassword(user: AdminUser) {
     const password = window.prompt(`Nova senha para ${user.username}:`);
     if (!password) return;
@@ -174,12 +186,14 @@ export function AdminPage() {
         username: newUsername,
         password: newPassword,
         whatsapp: newWhatsapp || undefined,
+        pro: newPro,
       });
       toast("success", "Usuário criado com acesso ativo");
       setNewName("");
       setNewUsername("");
       setNewPassword("");
       setNewWhatsapp("");
+      setNewPro(false);
       setShowNewUser(false);
       loadUsers();
     } catch (err) {
@@ -390,6 +404,18 @@ export function AdminPage() {
                     onChange={(e) => setNewWhatsapp(e.target.value)}
                   />
                 </div>
+                <div className="flex items-center gap-2 rounded-lg border border-ink-400 bg-ink-800 px-3 py-2.5">
+                  <input
+                    id="newPro"
+                    type="checkbox"
+                    className="h-4 w-4 accent-gold-500"
+                    checked={newPro}
+                    onChange={(e) => setNewPro(e.target.checked)}
+                  />
+                  <label htmlFor="newPro" className="text-sm text-cream/80">
+                    Liberar Versão PRO (acesso à IA)
+                  </label>
+                </div>
               </div>
               <div className="flex justify-end">
                 <button type="submit" className="btn btn-primary" disabled={creating}>
@@ -429,6 +455,11 @@ export function AdminPage() {
                       <td className="px-5 py-3">
                         <div className="font-medium text-cream">{u.name}</div>
                         <div className="text-xs text-cream/40">@{u.username}</div>
+                        {u.role === "USER" && u.pro && (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-gold-500/40 bg-gold-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-400">
+                            <Crown className="h-2.5 w-2.5" /> PRO
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -464,6 +495,19 @@ export function AdminPage() {
                               onClick={() => onUserAction(u.id, "block")}
                             >
                               <X className="h-3.5 w-3.5" /> Bloquear
+                            </button>
+                          )}
+                          {u.role === "USER" && u.id !== currentAdmin?.id && (
+                            <button
+                              type="button"
+                              className={`btn !px-2.5 !py-1.5 text-xs ${
+                                u.pro ? "btn-secondary" : "btn-primary"
+                              }`}
+                              onClick={() => onTogglePro(u)}
+                              title={u.pro ? "Revogar acesso à IA" : "Liberar acesso à IA"}
+                            >
+                              <Crown className="h-3.5 w-3.5" />
+                              {u.pro ? "PRO ativo" : "Liberar PRO"}
                             </button>
                           )}
                           {isBlocked(u.status) && (
