@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/*.db
+**/dev.db
+*.xlsx
+dump.rdb
+.git
+.superpowers
+docs
+backup01.xlsx
