@@ -59,6 +59,7 @@ inboxRouter.post(
 
 inboxRouter.post(
   "/:id/reactivate",
+  requirePro,
   ah(async (req, res) => {
     const { userId } = resolveScope(req);
     res.json(await reactivateConversation(req.params.id, userId));
