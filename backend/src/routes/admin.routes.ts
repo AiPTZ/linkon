@@ -11,6 +11,7 @@ import {
   createUser,
   listUsers,
   resetUserPassword,
+  setUserPro,
   unblockUser,
 } from "../services/user.service";
 import { requireAdmin } from "../middleware/auth";
@@ -149,6 +150,7 @@ const createUserSchema = z.object({
   username: z.string().min(3).max(40),
   password: z.string().min(6).max(100),
   whatsapp: z.string().max(25).optional(),
+  pro: z.boolean().optional(),
 });
 
 adminRouter.post(
@@ -199,6 +201,17 @@ adminRouter.post(
     const { password } = resetPasswordSchema.parse(req.body);
     await resetUserPassword(req.params.id, password);
     res.json({ ok: true });
+  }),
+);
+
+const setProSchema = z.object({ pro: z.boolean() });
+
+adminRouter.post(
+  "/users/:id/pro",
+  ah(async (req, res) => {
+    const body = setProSchema.parse(req.body);
+    const user = await setUserPro(req.params.id, body.pro);
+    res.json({ user });
   }),
 );
 

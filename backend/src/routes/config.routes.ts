@@ -18,6 +18,7 @@ const updateConfigSchema = z
 
 configRouter.get(
   "/",
+  requireAdmin,
   ah(async (_req, res) => {
     const [dsn, token, storedWebhookUrl] = await Promise.all([
       configService.unipileDsn(),
