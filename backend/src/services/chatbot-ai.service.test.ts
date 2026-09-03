@@ -35,11 +35,13 @@ vi.mock("./native-agent.service", () => ({
   refreshAgentCounters: vi.fn(),
   agentWithinLimits: vi.fn(),
 }));
+vi.mock("./user.service", () => ({ userHasAI: vi.fn() }));
 
 import { prisma } from "../lib/prisma";
 import { unipile } from "./unipile.service";
-import { generateDecision } from "./ai.service";
+import { generateDecision, generateInitialMessage } from "./ai.service";
 import { refreshAgentCounters, agentWithinLimits } from "./native-agent.service";
+import { userHasAI } from "./user.service";
 import {
   handleIncomingMessage,
   getOrCreateConversation,
@@ -74,7 +76,6 @@ const agent = {
 } as never;
 
 const campaign = { id: "C1", name: "Campanha Tech", accountId: "A1", inviteMessage: "Oi" } as never;
-
 const lead = {
   id: "L1",
   campaignId: "C1",
@@ -86,7 +87,12 @@ const lead = {
   lastMessageAt: null,
 } as never;
 
-beforeEach(() => vi.clearAllMocks());
+const userHasAIMock = userHasAI as ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  userHasAIMock.mockResolvedValue(true);
+});
 
 describe("getOrCreateConversation", () => {
   it("faz upsert por unipileChatId com campos opcionais nulos", async () => {
@@ -134,6 +140,39 @@ describe("handleIncomingMessage", () => {
     expect(
       await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "oi", campaignId: "C1", leadId: "L1" }),
     ).toBe("none");
+  });
+
+  it("não executa LLM quando o dono não é PRO: grava LEAD e marca NEEDS_HUMAN em campanha", async () => {
+    userHasAIMock.mockResolvedValue(false);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...(campaign as Record<string, unknown>),
+      userId: "U1",
+      agentEnabled: true,
+    });
+    (prisma.lead.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(lead);
+    (prisma.conversation.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "BOT" });
+    const action = await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "oi", campaignId: "C1", leadId: "L1" });
+    expect(action).toBe("none");
+    expect(userHasAI).toHaveBeenCalledWith("U1");
+    expect(prisma.conversationMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ conversationId: "CONV1", role: "LEAD", content: "oi" }),
+      }),
+    );
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "CONV1" }, data: expect.objectContaining({ status: "NEEDS_HUMAN" }) }),
+    );
+    expect(generateDecision).not.toHaveBeenCalled();
+  });
+
+  it("retorna none sem LLM para mensagem nativa quando o dono não é PRO", async () => {
+    userHasAIMock.mockResolvedValue(false);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "A1", userId: "U2" });
+    const action = await handleIncomingMessage({ accountId: "A1", chatId: "CHAT1", message: "oi" });
+    expect(action).toBe("none");
+    expect(prisma.conversation.upsert).not.toHaveBeenCalled();
+    expect(generateDecision).not.toHaveBeenCalled();
   });
 
   it("transfere para humano ao atingir o limite de respostas", async () => {
@@ -201,6 +240,21 @@ describe("resolveInitialMessage", () => {
     (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ ...(agent as Record<string, unknown>), initialMessageMode: "TEMPLATE" });
     const text = await resolveInitialMessage({ id: "C1", name: "Campanha Tech", accountId: "A1", inviteMessage: "Oi!" } as never, { name: "João", headline: "CEO" } as never);
     expect(text).toBe("Oi!");
+  });
+
+  it("retorna fallback sem LLM quando o dono não é PRO", async () => {
+    userHasAIMock.mockResolvedValue(false);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...(agent as Record<string, unknown>),
+      initialMessageMode: "AI",
+      initialTemplate: "Template",
+    });
+    const text = await resolveInitialMessage(
+      { id: "C1", name: "Campanha Tech", accountId: "A1", inviteMessage: "Oi!", userId: "U1" } as never,
+      { name: "João", headline: "CEO" } as never,
+    );
+    expect(text).toBe("Oi!");
+    expect(generateInitialMessage).not.toHaveBeenCalled();
   });
 });
 

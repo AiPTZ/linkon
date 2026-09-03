@@ -27,13 +27,15 @@ vi.mock("../services/chatbot-ai.service", () => ({
 vi.mock("../services/network.service", () => ({
   upsertRelationContact: vi.fn(),
 }));
+vi.mock("../services/user.service", () => ({ userHasAI: vi.fn() }));
 vi.mock("../config/env", () => ({ env: {} }));
 vi.mock("../utils/time", () => ({ randomInt: (min: number) => min }));
 
 import { prisma } from "../lib/prisma";
 import { chatbotQueue } from "../services/queue.service";
 import { createLog } from "../services/log.service";
-import { getOrCreateConversation } from "../services/chatbot-ai.service";
+import { getOrCreateConversation, recordMessage } from "../services/chatbot-ai.service";
+import { userHasAI } from "../services/user.service";
 import { upsertRelationContact } from "../services/network.service";
 import {
   pickBestLead,
@@ -43,6 +45,7 @@ import {
 } from "./webhooks.routes";
 
 const upsertContact = upsertRelationContact as ReturnType<typeof vi.fn>;
+const userHasAIMock = userHasAI as ReturnType<typeof vi.fn>;
 
 function lead(overrides: Partial<WebhookLeadCandidate>): WebhookLeadCandidate {
   return {
@@ -54,7 +57,10 @@ function lead(overrides: Partial<WebhookLeadCandidate>): WebhookLeadCandidate {
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  userHasAIMock.mockResolvedValue(true);
+});
 
 describe("pickBestLead", () => {
   it("returns null when no leads match", () => {
@@ -114,6 +120,30 @@ describe("handleWebhookEvent", () => {
       sender: { attendee_provider_id: "P1", name: "João" },
     });
     expect(createLog).toHaveBeenCalledWith(expect.objectContaining({ type: "AGENT_DISABLED" }));
+    expect(getOrCreateConversation).not.toHaveBeenCalled();
+    expect(chatbotQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("ignora mensagem nativa quando o dono não é PRO (AGENT_DISABLED sem conversa)", async () => {
+    userHasAIMock.mockResolvedValue(false);
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ ...account, userId: "U2" });
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      replyDelayMin: 30,
+      replyDelayMax: 30,
+    });
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT1",
+      account_info: { user_id: "OWN1", account_id: "UA1" },
+      sender: { attendee_provider_id: "P1", name: "João" },
+    });
+    expect(userHasAI).toHaveBeenCalledWith("U2");
+    expect(createLog).toHaveBeenCalledWith(expect.objectContaining({ type: "AGENT_DISABLED" }));
+    expect(getOrCreateConversation).not.toHaveBeenCalled();
     expect(chatbotQueue.add).not.toHaveBeenCalled();
   });
 
@@ -128,7 +158,12 @@ describe("handleWebhookEvent", () => {
     (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
       lead({ id: "L1", campaignId: "C1", providerId: "P1", name: "João" }),
     ]);
-    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "C1", accountId: "A1", flow: "" });
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "C1",
+      accountId: "A1",
+      flow: "",
+      userId: "U1",
+    });
     (getOrCreateConversation as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "BOT" });
     await handleWebhookEvent({
       event: "message_received",
@@ -168,7 +203,7 @@ describe("handleWebhookEvent", () => {
     );
   });
 
-  it("ignora mensagem quando o bot está desativado na campanha (agentEnabled=false)", async () => {
+  it("resposta de lead de campanha com bot desativado (agentEnabled=false) vai ao Inbox (LEAD + NEEDS_HUMAN)", async () => {
     (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
     (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -183,8 +218,10 @@ describe("handleWebhookEvent", () => {
       id: "C1",
       accountId: "A1",
       flow: "",
+      userId: "U1",
       agentEnabled: false,
     });
+    (getOrCreateConversation as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "BOT" });
     await handleWebhookEvent({
       event: "message_received",
       message: "olá",
@@ -193,8 +230,58 @@ describe("handleWebhookEvent", () => {
       account_info: { user_id: "OWN1" },
       sender: { attendee_provider_id: "P1", name: "João" },
     });
+    expect(getOrCreateConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: "A1", campaignId: "C1", leadId: "L1", unipileChatId: "CHAT1" }),
+    );
+    expect(recordMessage).toHaveBeenCalledWith({
+      conversationId: "CONV1",
+      role: "LEAD",
+      content: "olá",
+    });
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "CONV1" }, data: expect.objectContaining({ status: "NEEDS_HUMAN" }) }),
+    );
     expect(createLog).toHaveBeenCalledWith(
       expect.objectContaining({ type: "AGENT_DISABLED", campaignId: "C1" }),
+    );
+    expect(chatbotQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("resposta de lead de campanha com dono não-PRO vai ao Inbox (LEAD + NEEDS_HUMAN) e não enfileira reply", async () => {
+    userHasAIMock.mockResolvedValue(false);
+    (prisma.account.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(account);
+    (prisma.nativeAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      replyDelayMin: 30,
+      replyDelayMax: 30,
+    });
+    (prisma.lead.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      lead({ id: "L1", campaignId: "C1", providerId: "P1", name: "João" }),
+    ]);
+    (prisma.campaign.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "C1",
+      accountId: "A1",
+      flow: "",
+      userId: "U1",
+    });
+    (getOrCreateConversation as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "CONV1", status: "BOT" });
+    await handleWebhookEvent({
+      event: "message_received",
+      message: "olá",
+      chat_id: "CHAT1",
+      account_id: "UA1",
+      account_info: { user_id: "OWN1" },
+      sender: { attendee_provider_id: "P1", name: "João" },
+    });
+    expect(userHasAI).toHaveBeenCalledWith("U1");
+    expect(recordMessage).toHaveBeenCalledWith({
+      conversationId: "CONV1",
+      role: "LEAD",
+      content: "olá",
+    });
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "CONV1" }, data: expect.objectContaining({ status: "NEEDS_HUMAN" }) }),
     );
     expect(chatbotQueue.add).not.toHaveBeenCalled();
   });

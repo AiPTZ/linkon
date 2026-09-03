@@ -8,6 +8,7 @@ import { advanceOnEvent, hasFlow } from "../services/flow.service";
 import { upsertRelationContact } from "../services/network.service";
 import { unipile } from "../services/unipile.service";
 import { getOrCreateConversation, recordMessage, isConversationLocked } from "../services/chatbot-ai.service";
+import { userHasAI } from "../services/user.service";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { randomInt } from "../utils/time";
@@ -84,14 +85,14 @@ export function pickBestLead<T extends WebhookLeadCandidate>(leads: T[]): T | nu
 async function resolveAccount(input: {
   accountId?: string;
   userId?: string;
-}): Promise<{ id: string; providerId: string | null } | null> {
+}): Promise<{ id: string; providerId: string | null; userId: string | null } | null> {
   if (input.accountId) {
     const byUnipile = await prisma.account.findUnique({ where: { unipileAccountId: input.accountId } });
-    if (byUnipile) return { id: byUnipile.id, providerId: byUnipile.providerId ?? null };
+    if (byUnipile) return { id: byUnipile.id, providerId: byUnipile.providerId ?? null, userId: byUnipile.userId ?? null };
   }
   if (input.userId) {
     const byProvider = await prisma.account.findFirst({ where: { providerId: input.userId } });
-    if (byProvider) return { id: byProvider.id, providerId: byProvider.providerId ?? null };
+    if (byProvider) return { id: byProvider.id, providerId: byProvider.providerId ?? null, userId: byProvider.userId ?? null };
   }
   return null;
 }
@@ -157,19 +158,70 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
     if (campaign && hasFlow(campaign.flow)) return;
   }
 
-  if (lead && campaign && campaign.agentEnabled === false) {
+  // Chat de lead de campanha (disparo/convite) respondido: sempre chega ao Inbox.
+  const fromCampaign = Boolean(lead && campaign && hasChat);
+  if (fromCampaign) {
+    const conversation = await getOrCreateConversation({
+      accountId: account.id,
+      campaignId: campaign!.id,
+      leadId: lead!.id,
+      unipileChatId: event.chat_id as string,
+    });
+    const locked = isConversationLocked(conversation.status);
+    const aiAllowed = await userHasAI(campaign!.userId ?? null);
+    const canReply = aiAllowed && campaign!.agentEnabled !== false && agent?.enabled === true && !locked;
+
+    if (canReply) {
+      const delay = randomInt(agent!.replyDelayMin * 1000, agent!.replyDelayMax * 1000);
+      await chatbotQueue.add(
+        "reply",
+        {
+          accountId: account.id,
+          chatId: event.chat_id,
+          leadId: lead!.id,
+          campaignId: campaign!.id,
+          message: text,
+        },
+        {
+          delay,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 30_000 },
+          removeOnComplete: 500,
+          removeOnFail: 1000,
+        },
+      );
+      return;
+    }
+
+    if (text) {
+      await recordMessage({ conversationId: conversation.id, role: "LEAD", content: text });
+    }
+    if (!locked) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { status: "NEEDS_HUMAN" },
+      });
+    }
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: new Date() },
+    });
     await createLog({
-      type: "AGENT_DISABLED",
-      message: `Mensagem de ${event.sender?.name || senderId} ignorada (bot desativado nesta campanha)`,
-      campaignId: campaign.id,
-      leadId: lead.id,
+      type: locked ? "MESSAGE_RECEIVED" : "AGENT_DISABLED",
+      message: locked
+        ? `Mensagem de ${event.sender?.name || senderId} registrada (conversa em atendimento humano)`
+        : `Mensagem de ${event.sender?.name || senderId} sem resposta automática (IA desativada) — disponível no Inbox para atendimento humano`,
+      campaignId: campaign!.id,
+      leadId: lead!.id,
       accountId: account.id,
       payload: { chatId: event.chat_id, message: text },
     });
     return;
   }
 
-  if (!agent || !agent.enabled) {
+  // Mensagem fora de campanha (chat direto): só é respondida pela IA do agente nativo.
+  const nativeAiAllowed = await userHasAI(account.userId ?? null);
+  if (!nativeAiAllowed || !agent?.enabled) {
     await createLog({
       type: "AGENT_DISABLED",
       message: `Mensagem de ${event.sender?.name || senderId} ignorada (agente nativo desligado)`,
@@ -182,8 +234,8 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
 
   const conversation = await getOrCreateConversation({
     accountId: account.id,
-    campaignId: lead?.campaignId ?? null,
-    leadId: lead?.id ?? null,
+    campaignId: null,
+    leadId: null,
     unipileChatId: event.chat_id as string,
   });
 
@@ -210,8 +262,8 @@ async function handleMessageReceived(event: MessageWebhook): Promise<void> {
     {
       accountId: account.id,
       chatId: event.chat_id,
-      leadId: lead?.id ?? null,
-      campaignId: lead?.campaignId ?? null,
+      leadId: null,
+      campaignId: null,
       message: text,
     },
     {

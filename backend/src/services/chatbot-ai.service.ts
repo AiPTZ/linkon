@@ -13,6 +13,7 @@ import {
 import { refreshAgentCounters, agentWithinLimits } from "./native-agent.service";
 import { advanceScheduling, startBooking } from "./scheduling.service";
 import { logger } from "../utils/logger";
+import { userHasAI } from "./user.service";
 import type { Campaign, Lead, Conversation } from "@prisma/client";
 
 export type BotAction = "reply" | "transfer" | "ignore" | "none";
@@ -120,13 +121,33 @@ export async function handleIncomingMessage(input: {
   const account = await prisma.account.findUnique({ where: { id: input.accountId } });
   if (!account) return "none";
 
-  const agent = await prisma.nativeAgent.findUnique({ where: { accountId: input.accountId } });
-  if (!agent || !agent.enabled) return "none";
-
   const campaign = input.campaignId
     ? await prisma.campaign.findUnique({ where: { id: input.campaignId } })
     : null;
   const lead = input.leadId ? await prisma.lead.findUnique({ where: { id: input.leadId } }) : null;
+
+  const aiAllowed = await userHasAI((campaign?.userId ?? account.userId) ?? null);
+  if (!aiAllowed) {
+    if (campaign && input.message) {
+      const conv = await getOrCreateConversation({
+        accountId: account.id,
+        campaignId: input.campaignId,
+        leadId: input.leadId,
+        unipileChatId: input.chatId,
+      });
+      if (!isConversationLocked(conv.status)) {
+        await recordMessage({ conversationId: conv.id, role: "LEAD", content: input.message });
+        await prisma.conversation.update({
+          where: { id: conv.id },
+          data: { status: "NEEDS_HUMAN" },
+        });
+      }
+    }
+    return "none";
+  }
+
+  const agent = await prisma.nativeAgent.findUnique({ where: { accountId: input.accountId } });
+  if (!agent || !agent.enabled) return "none";
 
   if (campaign && campaign.agentEnabled === false) return "none";
 
@@ -402,10 +423,12 @@ export async function handleIncomingMessage(input: {
 }
 
 export async function resolveInitialMessage(
-  campaign: Pick<Campaign, "name" | "accountId" | "inviteMessage">,
+  campaign: Pick<Campaign, "name" | "accountId" | "inviteMessage"> & { userId?: string | null },
   lead: Pick<Lead, "name" | "headline">,
 ): Promise<string> {
   const fallback = (campaign.inviteMessage ?? "").trim();
+  const aiAllowed = await userHasAI(campaign.userId ?? null);
+  if (!aiAllowed) return fallback;
   const agent = await prisma.nativeAgent.findUnique({ where: { accountId: campaign.accountId } });
   if (!agent || agent.initialMessageMode !== "AI") return fallback;
   if (!fallback && !agent.initialTemplate) return fallback;
