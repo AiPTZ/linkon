@@ -45,7 +45,7 @@ trap shutdown TERM INT EXIT
 # Se algum processo cair, derruba o resto e sai para o orquestrador reiniciar.
 while true; do
   for entry in "${PIDS[@]}"; do
-    local pid="${entry##*:}"
+    pid="${entry##*:}"
     if ! kill -0 "$pid" 2>/dev/null; then
       echo "[linkon] Processo caiu: $entry"
       shutdown
