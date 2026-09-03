@@ -14,8 +14,10 @@ import {
   Trash2,
   UserCog,
   UserPlus,
+  Webhook,
   X,
 } from "lucide-react";
+import { UnipileIntegrationSection } from "../components/UnipileIntegrationSection";
 import { api } from "../lib/api";
 import type { Account, AdminUser, LogEvent, Paginated, UserStatus } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
@@ -53,7 +55,7 @@ interface Overview {
   timestamp: string;
 }
 
-type Tab = "overview" | "users" | "accounts" | "global" | "logs";
+type Tab = "overview" | "users" | "accounts" | "global" | "logs" | "integration";
 
 const QUEUE_LABELS = {
   invites: "Convites",
@@ -225,6 +227,7 @@ export function AdminPage() {
 
   const tabs: { key: Tab; label: string; icon: typeof Activity }[] = [
     { key: "overview", label: "Visão geral", icon: Activity },
+    { key: "integration", label: "Integração Unipile", icon: Webhook },
     { key: "users", label: "Usuários", icon: UserPlus },
     { key: "accounts", label: "Contas LinkedIn", icon: Link2 },
     { key: "global", label: "Base global", icon: Globe },
@@ -339,6 +342,8 @@ export function AdminPage() {
           )}
         </div>
       )}
+
+      {tab === "integration" && <UnipileIntegrationSection />}
 
       {tab === "users" && (
         <div>

@@ -60,7 +60,7 @@ const FEATURES = [
 const STEPS = [
   {
     title: "Configure sua instância Unipile",
-    desc: "Em Configurações, informe o DSN e o Access Token da sua conta Unipile. É a ponte entre o Link ON e o LinkedIn.",
+    desc: "O administrador informa o DSN e o Access Token da Unipile no painel Administração. É a ponte entre o Link ON e o LinkedIn.",
   },
   {
     title: "Conecte sua conta LinkedIn",
@@ -352,7 +352,7 @@ export function LandingPage() {
             Pronto para colocar sua prospecção <span className="gold-gradient-text">no automático?</span>
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-cream/55">
-            Configure sua Unipile, conecte sua conta do LinkedIn e inicie a primeira campanha em poucos minutos.
+            Conecte sua conta do LinkedIn e inicie a primeira campanha em poucos minutos.
           </p>
           <button type="button" className="btn btn-primary mt-8 px-8 py-3 text-base" onClick={() => navigate("/campanhas")}>
             <Play className="h-4 w-4" />

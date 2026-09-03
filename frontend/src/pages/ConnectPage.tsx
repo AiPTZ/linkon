@@ -61,8 +61,8 @@ export function ConnectPage() {
 
   useEffect(() => {
     api
-      .get<{ unipileDsnConfigured: boolean; unipileAccessTokenConfigured: boolean }>("/config")
-      .then((c) => setUnipileConfigured(c.unipileDsnConfigured && c.unipileAccessTokenConfigured))
+      .get<{ unipileConfigured: boolean }>("/health")
+      .then((h) => setUnipileConfigured(h.unipileConfigured))
       .catch(() => setUnipileConfigured(false));
     loadAccounts();
   }, [loadAccounts]);
@@ -185,9 +185,13 @@ export function ConnectPage() {
       {!unipileConfigured && (
         <div className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
           A API da Unipile ainda não foi configurada.{" "}
-          <Link to="/configuracoes" className="underline hover:text-amber-200">
-            Configure o DSN e o Access Token
-          </Link>{" "}
+          {isAdmin ? (
+            <Link to="/administracao" className="underline hover:text-amber-200">
+              Configure a integração no painel de Administração
+            </Link>
+          ) : (
+            <span>aguarde o administrador configurar a integração.</span>
+          )}{" "}
           antes de conectar contas.
         </div>
       )}
@@ -336,9 +340,9 @@ export function ConnectPage() {
           </div>
           <p className="mt-2 text-sm text-cream/50">
             Necessário para detectar aceite de convites e mensagens em tempo real. Exige a URL pública
-            do webhook configurada nas{" "}
-            <Link to="/configuracoes" className="underline text-gold-400 hover:text-gold-300">
-              configurações
+            do webhook configurada no{" "}
+            <Link to="/administracao" className="underline text-gold-400 hover:text-gold-300">
+              painel de Administração
             </Link>
             .
           </p>

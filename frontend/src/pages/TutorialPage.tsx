@@ -23,9 +23,8 @@ interface Step {
 const STEPS: Step[] = [
   {
     n: 1,
-    title: "Configure a API da Unipile",
-    text: "Acesse Configurações e informe o DSN e o Access Token da sua instância Unipile, além da URL pública do webhook. É o motor que conecta e envia pelo LinkedIn.",
-    action: { to: "/configuracoes", label: "Abrir configurações" },
+    title: "Integração com a Unipile (administrador)",
+    text: "O administrador configura a API da Unipile (DSN, Access Token e URL do webhook) no painel Administração. Esse passo é exclusivo do administrador — usuários comuns não precisam de credenciais.",
     icon: Settings,
   },
   {
