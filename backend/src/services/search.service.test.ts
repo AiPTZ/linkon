@@ -97,7 +97,7 @@ describe("importLeadsFromSearch", () => {
     expect(res.imported).toBe(4);
   });
 
-  it("para quando uma página não traz leads novos", async () => {
+  it("para quando uma página repete o conteúdo da anterior (ciclo)", async () => {
     searchByUrl
       .mockResolvedValueOnce(pageWith(["a", "b"]))
       .mockResolvedValueOnce(pageWith(["a", "b"]));
@@ -107,6 +107,22 @@ describe("importLeadsFromSearch", () => {
     expect(searchByUrl).toHaveBeenCalledTimes(2);
     expect(leadUpsert).toHaveBeenCalledTimes(2);
     expect(res.imported).toBe(2);
+  });
+
+  it("continua para as próximas páginas quando a página 1 já está importada (retry/re-execução)", async () => {
+    leadFindMany.mockResolvedValue(
+      ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"].map((providerId) => ({ providerId })),
+    );
+    searchByUrl
+      .mockResolvedValueOnce(pageWith(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]))
+      .mockResolvedValueOnce(pageWith(["k", "l", "m", "n"]))
+      .mockResolvedValueOnce(pageWith([]));
+
+    const res = await importLeadsFromSearch(campaign());
+
+    expect(searchByUrl).toHaveBeenCalledTimes(3);
+    expect(leadUpsert).toHaveBeenCalledTimes(4);
+    expect(res.imported).toBe(4);
   });
 
   it("respeita maxLeads", async () => {

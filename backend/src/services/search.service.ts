@@ -48,10 +48,22 @@ export async function importLeadsFromSearch(campaign: Campaign): Promise<ImportR
   let imported = 0;
   let page = 1;
   let reachedEnd = false;
+  const seenSignatures = new Set<string>();
 
   while (imported < campaign.maxLeads && !reachedEnd) {
     const result = await unipile.searchByUrl(account.unipileAccountId, campaign.searchUrl, page, 25);
     const people = (result.items ?? []).filter((i) => i.type === "PEOPLE");
+    if (people.length === 0) {
+      reachedEnd = true;
+      break;
+    }
+
+    const signature = people.map((i) => i.id).join("|");
+    if (seenSignatures.has(signature)) {
+      reachedEnd = true;
+      break;
+    }
+    seenSignatures.add(signature);
 
     let newCount = 0;
     for (const item of people) {
@@ -62,9 +74,7 @@ export async function importLeadsFromSearch(campaign: Campaign): Promise<ImportR
       imported++;
     }
 
-    if (people.length === 0 || newCount === 0) {
-      reachedEnd = true;
-    } else if (imported < campaign.maxLeads) {
+    if (newCount > 0 && imported < campaign.maxLeads) {
       await sleep(randomInt(3000, 8000));
     }
     page++;
