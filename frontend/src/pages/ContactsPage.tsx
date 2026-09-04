@@ -8,7 +8,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Account, Contact, ContactListResponse } from "../types";
+import type { Account, Contact, ContactListResponse, ContactScrapeStats } from "../types";
 import { PageLoader } from "../components/Spinner";
 import { formatDateTime, shortName } from "../lib/format";
 import { useToast, toastFromError } from "../components/Toast";
@@ -47,6 +47,10 @@ export function ContactsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [detail, setDetail] = useState<Contact | null>(null);
   const headerRef = useRef<HTMLInputElement>(null);
+  const [cstats, setCstats] = useState<ContactScrapeStats | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const lastPendingRef = useRef<number | null>(null);
+  const lastScrapedRef = useRef<number | null>(null);
   const { toast } = useToast();
 
   const load = useCallback(() => {
@@ -82,6 +86,42 @@ export function ContactsPage() {
   }, [toast]);
 
   useEffect(() => {
+    if (!accountId) {
+      setCstats(null);
+      return;
+    }
+    const loadStats = () => {
+      api
+        .get<ContactScrapeStats>(`/contacts/stats?accountId=${accountId}`)
+        .then(setCstats)
+        .catch(() => {});
+    };
+    loadStats();
+    const t = setInterval(loadStats, 5000);
+    return () => clearInterval(t);
+  }, [accountId]);
+
+  useEffect(() => {
+    if (!cstats) return;
+    const prevPending = lastPendingRef.current;
+    const prevScraped = lastScrapedRef.current;
+    lastPendingRef.current = cstats.pending;
+    lastScrapedRef.current = cstats.scraped;
+    if (prevPending === null) return;
+    if (prevPending > 0 && cstats.pending === 0) {
+      load();
+      setExtracting(false);
+      toast(
+        "success",
+        `Extração concluída: ${cstats.withEmail} e-mail(s) e ${cstats.withPhone} telefone(s) de ${cstats.total} contato(s).`,
+      );
+    } else if (cstats.pending > 0 && cstats.scraped !== prevScraped) {
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cstats]);
+
+  useEffect(() => {
     if (!q.trim()) return;
     const t = setTimeout(load, 400);
     return () => clearTimeout(t);
@@ -96,9 +136,10 @@ export function ContactsPage() {
     setBusy("sweep");
     try {
       await api.post<{ ok: boolean }>("/contacts/sync", { accountId, autoScrape: true });
+      setExtracting(true);
       toast(
         "success",
-        "Varredura iniciada. As conexões serão sincronizadas e a extração de e-mails/telefones agendada automaticamente.",
+        "Varredura iniciada. A extração roda em segundo plano e a lista é atualizada automaticamente.",
       );
       window.setTimeout(load, 6000);
       window.setTimeout(load, 20000);
@@ -124,6 +165,7 @@ export function ContactsPage() {
         });
         if (r.scheduled > 0) {
           toast("success", `Extração de ${r.scheduled} contato(s) sem e-mail/telefone agendada`);
+          setExtracting(true);
         } else {
           toast("success", "Todos os contatos desta conta já possuem e-mail ou telefone extraído.");
         }
@@ -252,6 +294,26 @@ export function ContactsPage() {
             {selectAll ? `Todos os ${total} selecionados (filtro atual)` : `${total} contato(s)`}
           </span>
         </div>
+        {cstats && cstats.total > 0 && (
+          cstats.pending > 0 && (extracting || cstats.scraped > 0) ? (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-xs text-cream/80">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-gold-400" />
+              Extraindo contatos em segundo plano... {cstats.scraped}/{cstats.total} concluídos
+              {" · "}
+              {cstats.withEmail} e-mail(s) até agora. A lista é atualizada automaticamente.
+            </div>
+          ) : cstats.pending > 0 ? (
+            <div className="mt-4 rounded-lg border border-ink-400 bg-ink-700/40 px-3 py-2 text-xs text-cream/50">
+              {cstats.pending} contato(s) de {cstats.total} ainda sem e-mail/telefone nesta conta.
+              Clique em "Varrer rede e extrair contatos" para extrair.
+            </div>
+          ) : (
+            <div className="mt-4 text-xs text-cream/40">
+              Extração concluída nesta conta: {cstats.withEmail} com e-mail, {cstats.withPhone} com
+              telefone, de {cstats.total} contato(s).
+            </div>
+          )
+        )}
       </div>
 
       {contacts.length === 0 ? (

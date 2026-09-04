@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import {
   buildContactsXlsx,
+  contactScrapeStats,
   getContact,
   listContacts,
   scheduleContactScrape,
@@ -50,6 +51,20 @@ contactsRouter.get(
     const scope = resolveScope(req);
     const { items, total } = await listContacts(scope.userId, parseListQuery(req.query));
     res.json({ items, total });
+  }),
+);
+
+contactsRouter.get(
+  "/stats",
+  ah(async (req, res) => {
+    const scope = resolveScope(req);
+    const accountId = typeof req.query.accountId === "string" && req.query.accountId.length > 0
+      ? req.query.accountId
+      : null;
+    if (accountId) {
+      assertAccountInScope(await prisma.account.findUnique({ where: { id: accountId } }), scope.userId);
+    }
+    res.json(await contactScrapeStats(accountId));
   }),
 );
 

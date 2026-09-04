@@ -8,12 +8,13 @@ vi.mock("../services/network.service", () => ({
   getContact: vi.fn(),
   scheduleContactScrape: vi.fn(),
   buildContactsXlsx: vi.fn(),
+  contactScrapeStats: vi.fn(),
 }));
 vi.mock("../services/queue.service", () => ({ contactsQueue: { add: vi.fn() } }));
 
 import { ApiError } from "../utils/errors";
 import { prisma } from "../lib/prisma";
-import { buildContactsXlsx, getContact, scheduleContactScrape } from "../services/network.service";
+import { buildContactsXlsx, contactScrapeStats, getContact, scheduleContactScrape } from "../services/network.service";
 import { contactsQueue } from "../services/queue.service";
 import { syncSchema, scrapeSchema, parseListQuery, contactsRouter } from "./contacts.routes";
 
@@ -145,6 +146,32 @@ describe("GET /export-xlsx", () => {
     const { next } = await invokeRoute("get", "/export-xlsx", {
       query: { accountId: "A2" },
     });
+    const err = next.mock.calls[0]?.[0];
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(403);
+  });
+});
+
+describe("GET /stats", () => {
+  it("retorna stats da conta dentro do escopo", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "A1", userId: "U1" });
+    (contactScrapeStats as ReturnType<typeof vi.fn>).mockResolvedValue({
+      total: 10,
+      scraped: 8,
+      withContact: 7,
+      withEmail: 6,
+      withPhone: 3,
+      pending: 2,
+    });
+    const { res, next } = await invokeRoute("get", "/stats", { query: { accountId: "A1" } });
+    expect(next).not.toHaveBeenCalled();
+    expect(contactScrapeStats).toHaveBeenCalledWith("A1");
+    expect(res.body).toEqual({ total: 10, scraped: 8, withContact: 7, withEmail: 6, withPhone: 3, pending: 2 });
+  });
+
+  it("rejeita conta fora do escopo", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "A2", userId: "OUTRO" });
+    const { next } = await invokeRoute("get", "/stats", { query: { accountId: "A2" } });
     const err = next.mock.calls[0]?.[0];
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(403);
