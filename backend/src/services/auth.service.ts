@@ -90,7 +90,7 @@ export async function solveCheckpoint(
 
 export async function createHostedAuthUrl(userId: string | null): Promise<{ url: string }> {
   const dsn = await configService.unipileDsn();
-  if (!dsn) throw new ApiError(503, "Unipile DSN não configurado");
+  if (!dsn) throw new ApiError(503, "Integração não configurada. Defina o endereço da API em Administração → Integração");
 
   const apiUrl = dsn.replace(/\/+$/, "");
   const expiresOn = new Date(Date.now() + 10 * 60_000).toISOString();

@@ -23,8 +23,8 @@ interface Step {
 const STEPS: Step[] = [
   {
     n: 1,
-    title: "Unipile é configurada pelo administrador",
-    text: "A conexão com o LinkedIn passa pela API da Unipile. O administrador informa o DSN, o Access Token e a URL do webhook em Administração → Integração Unipile e registra os webhooks na página Conta LinkedIn. Usuários comuns não precisam de nenhuma credencial.",
+    title: "Integração configurada pelo administrador",
+    text: "A conexão com o LinkedIn passa por uma integração configurada pelo administrador. Ele informa o endereço da API, o token de acesso e a URL do webhook em Administração → Integração e registra os webhooks na página Contas LinkedIn. Usuários comuns não precisam de nenhuma credencial.",
     icon: Settings,
   },
   {

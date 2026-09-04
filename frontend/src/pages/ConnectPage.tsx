@@ -194,7 +194,7 @@ export function ConnectPage() {
 
       {!unipileConfigured && (
         <div className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-          A API da Unipile ainda não foi configurada.{" "}
+          A integração com o LinkedIn ainda não foi configurada.{" "}
           {isAdmin ? (
             <Link to="/administracao" className="underline hover:text-amber-200">
               Configure a integração no painel de Administração
@@ -308,7 +308,7 @@ export function ConnectPage() {
             Conectar
           </button>
           <p className="text-xs text-cream/40">
-            Suas credenciais são criptografadas e usadas apenas para autenticar na Unipile.
+            Suas credenciais são criptografadas e usadas apenas para autenticar sua conta.
           </p>
         </form>
       )}
@@ -347,7 +347,7 @@ export function ConnectPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Webhook className="h-4 w-4 text-gold-500" />
-              <h2 className="font-medium text-cream">Webhooks da Unipile</h2>
+              <h2 className="font-medium text-cream">Webhooks de eventos</h2>
             </div>
             <button type="button" className="btn btn-secondary" disabled={webhookLoading || !unipileConfigured} onClick={onRegisterWebhooks}>
               {webhookLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}

@@ -549,7 +549,7 @@ export function CampaignDetailPage() {
               className="btn btn-secondary !px-3 !py-1.5 text-xs"
               disabled={busy !== null}
               onClick={onScrapeContacts}
-              title="Buscar e-mails e telefones dos leads na Unipile (disponível para conexões de 1º grau)"
+              title="Buscar e-mails e telefones dos leads (disponível para conexões de 1º grau)"
             >
               {busy === "scrape" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Extrair contatos

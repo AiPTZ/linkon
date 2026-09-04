@@ -86,7 +86,7 @@ export class UnipileService {
     if (!dsn || !token) {
       throw new ApiError(
         503,
-        "Unipile nao configurado. Defina o DSN e o Access Token na pagina de Configuracoes.",
+        "Integração não configurada. Defina o endereço da API e o token de acesso em Administração → Integração.",
       );
     }
     return { dsn, token };
@@ -113,7 +113,7 @@ export class UnipileService {
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       });
     } catch (err) {
-      throw new UnipileError(503, "errors/network_down", `Falha de rede ao acessar Unipile: ${(err as Error).message}`);
+      throw new UnipileError(503, "errors/network_down", `Falha de rede ao acessar a API de integração: ${(err as Error).message}`);
     }
 
     const text = await res.text();
@@ -134,7 +134,7 @@ export class UnipileService {
         (body.detail as string) ||
         (body.title as string) ||
         (body.message as string) ||
-        `Unipile HTTP ${res.status}`;
+        `API de integração respondeu HTTP ${res.status}`;
       throw new UnipileError(res.status, errorType, message, data);
     }
 

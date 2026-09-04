@@ -71,9 +71,9 @@ export function UnipileIntegrationSection() {
                 {health.unipileConfigured ? "Configurada" : "Não configurada"}
               </span>
               <span>·</span>
-              <span>DSN {dsnOk ? "definido" : "vazio"}</span>
+              <span>Endereço da API {dsnOk ? "definido" : "vazio"}</span>
               <span>·</span>
-              <span>Access Token {tokenOk ? "definido" : "vazio"}</span>
+              <span>Token de acesso {tokenOk ? "definido" : "vazio"}</span>
               <span>·</span>
               <span>Webhook {config.webhookPublicUrlConfigured ? "definido" : "vazio"}</span>
             </div>
@@ -84,7 +84,7 @@ export function UnipileIntegrationSection() {
       <form onSubmit={onSave} className="card space-y-5 p-5">
         <h2 className="flex items-center gap-2 font-serif text-lg text-gold-400">
           <KeyRound className="h-5 w-5" />
-          Credenciais da Unipile
+          Credenciais da integração
         </h2>
         <p className="text-sm text-cream/50">
           Estas credenciais são usadas pela plataforma para conectar e enviar pelo LinkedIn. Apenas
@@ -93,30 +93,30 @@ export function UnipileIntegrationSection() {
 
         <div>
           <label htmlFor="unipileDsn" className="label">
-            DSN da Unipile {dsnOk && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5 text-emerald-400" />}
+            Endereço da API {dsnOk && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5 text-emerald-400" />}
           </label>
           <input
             id="unipileDsn"
             className="input"
             type="url"
-            placeholder="https://api1.unipile.com:13111"
+            placeholder="https://api.exemplo.com:13111"
             value={dsn}
             onChange={(e) => setDsn(e.target.value)}
           />
           <p className="mt-1.5 text-xs text-cream/40">
-            Endereço da sua instância Unipile. Ex: https://api1.unipile.com:13111
+            Endereço da API de integração (instância de autenticação). Ex: https://api.exemplo.com:13111
           </p>
         </div>
 
         <div>
           <label htmlFor="unipileAccessToken" className="label">
-            Access Token {tokenOk && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5 text-emerald-400" />}
+            Token de acesso {tokenOk && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5 text-emerald-400" />}
           </label>
           <input
             id="unipileAccessToken"
             className="input"
             type="password"
-            placeholder={tokenOk ? "•••••••• (definido)" : "Cole seu access token"}
+            placeholder={tokenOk ? "•••••••• (definido)" : "Cole seu token de acesso"}
             value={token}
             onChange={(e) => setToken(e.target.value)}
           />
@@ -138,9 +138,9 @@ export function UnipileIntegrationSection() {
             onChange={(e) => setWebhookUrl(e.target.value)}
           />
           <p className="mt-1.5 text-xs text-cream/40">
-            URL base pública onde este servidor é acessível. A Unipile enviará eventos para{" "}
-            <code className="text-gold-400">{webhookUrl}/api/webhooks/unipile</code>. Necessária
-            para detecção de aceites e mensagens.
+            URL base pública onde este servidor é acessível. Os eventos de aceites e mensagens são
+            entregues na rota de webhook deste servidor. Necessária para detecção de aceites e
+            mensagens.
           </p>
         </div>
 
@@ -165,7 +165,9 @@ export function UnipileIntegrationSection() {
             {config.webhooks.map((w) => (
               <li key={w.id} className="flex items-center justify-between gap-3 rounded-lg border border-ink-400 bg-ink-800 px-4 py-2.5 text-sm">
                 <span className="font-medium capitalize text-cream">{w.source}</span>
-                <code className="truncate text-xs text-cream/50">{w.requestUrl}</code>
+                <code className="truncate text-xs text-cream/50">
+                  {w.requestUrl.replace(/\/api\/webhooks\/[^/]*$/, "/api/webhooks")}
+                </code>
               </li>
             ))}
           </ul>

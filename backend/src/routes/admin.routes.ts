@@ -129,7 +129,7 @@ adminRouter.post(
       if (err instanceof ApiError && err.status === 503) {
         throw new ApiError(
           400,
-          "Unipile não configurada. Não é possível desconectar a conta na API.",
+          "Integração não configurada. Não é possível desconectar a conta na API.",
         );
       }
       throw err;

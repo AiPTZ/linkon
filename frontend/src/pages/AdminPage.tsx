@@ -227,7 +227,7 @@ export function AdminPage() {
 
   const tabs: { key: Tab; label: string; icon: typeof Activity }[] = [
     { key: "overview", label: "Visão geral", icon: Activity },
-    { key: "integration", label: "Integração Unipile", icon: Webhook },
+    { key: "integration", label: "Integração", icon: Webhook },
     { key: "users", label: "Usuários", icon: UserPlus },
     { key: "accounts", label: "Contas LinkedIn", icon: Link2 },
     { key: "global", label: "Base global", icon: Globe },

@@ -59,8 +59,8 @@ const FEATURES = [
 
 const STEPS = [
   {
-    title: "Administrador configura a Unipile",
-    desc: "Em Administração → Integração Unipile, o admin informa o DSN, o Access Token e a URL do webhook e registra os webhooks. Usuários não precisam de credenciais.",
+    title: "Administrador configura a integração",
+    desc: "Em Administração → Integração, o admin informa o endereço da API, o token de acesso e a URL do webhook e registra os webhooks. Usuários não precisam de credenciais.",
   },
   {
     title: "Conecte sua conta do LinkedIn",
@@ -190,7 +190,7 @@ export function LandingPage() {
               Como operar em 6 passos
             </h2>
             <p className="mt-4 text-cream/55">
-              Da integração da Unipile (feita pelo administrador) ao primeiro envio — em poucos
+              Da integração (feita pelo administrador) ao primeiro envio — em poucos
               minutos.
             </p>
           </div>
