@@ -3,7 +3,8 @@ import { ApiError } from "../utils/errors";
 
 vi.mock("../lib/prisma", () => ({
   prisma: {
-    campaign: { findFirst: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
+    campaign: { findFirst: vi.fn(), update: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
+    account: { findUnique: vi.fn() },
     nativeAgent: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
   },
@@ -105,5 +106,50 @@ describe("campaign PUT gate agentEnabled", () => {
     expect((err as ApiError).message).toBe(
       "O bot com IA é um recurso da Versão PRO. Fale com o administrador para liberar.",
     );
+  });
+});
+
+describe("campaign POST gate agentEnabled", () => {
+  it("cria campanha sem bot de IA (agentEnabled=false) para USER sem pro quando o campo é omitido", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      role: "USER",
+      pro: false,
+      status: "ACTIVE",
+    });
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "ACC",
+      userId: "U1",
+    });
+    (prisma.campaign.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "C1",
+      cadence: null,
+    });
+
+    const { campaignsRouter } = await import("./campaigns.routes");
+    const layer = (
+      campaignsRouter as unknown as {
+        stack: Array<{
+          route?: { path?: string; methods?: Record<string, boolean>; stack: Array<{ handle: (...a: unknown[]) => unknown }> };
+        }>;
+      }
+    ).stack.find((l) => l.route && l.route.path === "/" && l.route.methods?.post);
+    if (!layer?.route) throw new Error("POST / not found");
+    const handle = layer.route.stack[layer.route.stack.length - 1].handle as (req: unknown, res: unknown, next: unknown) => void;
+
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+    const req = {
+      user: { sub: "U1", role: "USER" },
+      body: { name: "Campanha Kennedy", mode: "SEARCH", accountId: "ACC", searchUrl: "https://www.linkedin.com/search/results/people/?keywords=a" },
+    };
+
+    await handle(req, res, next);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(next).not.toHaveBeenCalled();
+    expect(prisma.campaign.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ agentEnabled: false }) }),
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
   });
 });

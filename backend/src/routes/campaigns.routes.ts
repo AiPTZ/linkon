@@ -182,12 +182,16 @@ campaignsRouter.post(
       throw new ApiError(400, "URL da busca é obrigatória");
     }
     const data = toData(body);
+    const explicitlyAskedForAgent = req.body?.agentEnabled === true;
     if (data.agentEnabled === true) {
       const actor = currentUser(req);
       if (actor.role !== "ADMIN") {
         const allowed = await userHasAI(actor.sub);
         if (!allowed) {
-          throw new ApiError(403, "O bot com IA é um recurso da Versão PRO. Fale com o administrador para liberar.");
+          if (explicitlyAskedForAgent) {
+            throw new ApiError(403, "O bot com IA é um recurso da Versão PRO. Fale com o administrador para liberar.");
+          }
+          data.agentEnabled = false;
         }
       }
     }
