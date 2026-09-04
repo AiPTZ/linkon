@@ -20,7 +20,7 @@ export interface NativeOptions {
 
 export async function assertCanConnectLinkedIn(userId: string): Promise<void> {
   const owned = await prisma.account.count({
-    where: { userId, status: { not: "REJECTED" } },
+    where: { userId, status: { notIn: ["REJECTED", "DISCONNECTED"] } },
   });
   if (owned > 0) throw new ApiError(409, "Limite de 1 conta LinkedIn por usuário atingido");
 }
@@ -103,7 +103,27 @@ export async function createHostedAuthUrl(userId: string | null): Promise<{ url:
     failureRedirectUrl: `${frontendOrigin}/conectar?hosted=error`,
     name: `linkon-connect-${userId ?? "global"}-${Date.now()}`,
   });
+  markHostedIntent(userId);
   return { url: result.url };
+}
+
+const hostedIntents = new Map<string, number>();
+const HOSTED_INTENT_TTL_MS = 45 * 60_000;
+
+export function markHostedIntent(userId: string | null): void {
+  if (!userId) return;
+  hostedIntents.set(userId, Date.now());
+}
+
+export function hasRecentHostedIntent(userId: string | null): boolean {
+  if (!userId) return false;
+  const at = hostedIntents.get(userId);
+  if (!at) return false;
+  if (Date.now() - at > HOSTED_INTENT_TTL_MS) {
+    hostedIntents.delete(userId);
+    return false;
+  }
+  return true;
 }
 
 export async function confirmHosted(
@@ -147,7 +167,7 @@ export async function confirmHosted(
   return { accounts: created };
 }
 
-async function adoptRecentHosted(
+export async function adoptRecentHosted(
   userId: string,
   items: UnipileAccount[],
   opts: { pending: boolean },
@@ -236,6 +256,10 @@ export async function registerWebhooks(): Promise<{ messagingId?: string; usersI
 
 export async function syncAccounts(): Promise<void> {
   const { items = [] } = await unipile.listAccounts();
+  await syncFromItems(items);
+}
+
+export async function syncFromItems(items: UnipileAccount[]): Promise<void> {
   for (const acc of items) {
     const status = acc.sources?.[0]?.status ?? acc.status ?? "OK";
     const local = await prisma.account.findUnique({ where: { unipileAccountId: acc.id } });

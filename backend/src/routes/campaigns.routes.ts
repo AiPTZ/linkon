@@ -200,6 +200,12 @@ campaignsRouter.post(
     if (!account) throw new ApiError(400, "Conta vinculada não encontrada");
     const scope = resolveScope(req);
     assertAccountInScope(account, scope.userId);
+    if (account.status !== "OK") {
+      throw new ApiError(
+        400,
+        "A conta selecionada precisa estar conectada (status OK) antes de criar a campanha. Conecte a conta e tente novamente.",
+      );
+    }
 
     const campaign = await prisma.campaign.create({
       data: {
@@ -303,6 +309,12 @@ campaignsRouter.put(
       const account = await prisma.account.findUnique({ where: { id: data.accountId as string } });
       if (!account) throw new ApiError(400, "Conta vinculada não encontrada");
       assertAccountInScope(account, resolveScope(req).userId);
+      if (account.status !== "OK") {
+        throw new ApiError(
+          400,
+          "A conta selecionada precisa estar conectada (status OK). Conecte a conta e tente novamente.",
+        );
+      }
     }
 
     const campaign = await prisma.campaign.update({ where: { id: req.params.id }, data });

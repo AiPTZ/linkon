@@ -1,6 +1,13 @@
 import { Router, type Request } from "express";
 import { prisma } from "../lib/prisma";
-import { syncAccounts, disconnectAccount, confirmHosted } from "../services/auth.service";
+import {
+  syncFromItems,
+  adoptRecentHosted,
+  disconnectAccount,
+  confirmHosted,
+  hasRecentHostedIntent,
+} from "../services/auth.service";
+import { unipile } from "../services/unipile.service";
 import { previewRelations } from "../services/sweep.service";
 import { resolveScope } from "../utils/scope";
 import { ApiError } from "../utils/errors";
@@ -20,12 +27,16 @@ accountsRouter.post(
 accountsRouter.get(
   "/",
   ah(async (req, res) => {
+    const scope = resolveScope(req);
     try {
-      await syncAccounts();
+      const { items = [] } = await unipile.listAccounts();
+      await syncFromItems(items);
+      if (scope.userId && hasRecentHostedIntent(scope.userId)) {
+        await adoptRecentHosted(scope.userId, items, { pending: false });
+      }
     } catch {
       // Unipile nao configurado: retorna contas locais mesmo assim
     }
-    const scope = resolveScope(req);
     const accounts = await prisma.account.findMany({
       where: { userId: scope.userId },
       orderBy: { createdAt: "desc" },

@@ -142,7 +142,21 @@ describe("startCampaign", () => {
     campaignFind.mockResolvedValue(campaign({ status: "IMPORTING" }));
     await startCampaign("C1");
     expect(campaignUpdate).not.toHaveBeenCalled();
-    expect(notifyFn).not.toHaveBeenCalled();
+  });
+
+  it("recusa iniciar quando a conta está DISCONNECTED", async () => {
+    campaignFind.mockResolvedValue(campaign());
+    accountFind.mockResolvedValue({ ...account, status: "DISCONNECTED" });
+    await expect(startCampaign("C1")).rejects.toThrow("desconectada");
+    expect(campaignUpdate).not.toHaveBeenCalled();
+    expect(searchAdd).not.toHaveBeenCalled();
+  });
+
+  it("recusa iniciar quando a conta está em CHECKPOINT", async () => {
+    campaignFind.mockResolvedValue(campaign());
+    accountFind.mockResolvedValue({ ...account, status: "CHECKPOINT" });
+    await expect(startCampaign("C1")).rejects.toThrow("verificação");
+    expect(campaignUpdate).not.toHaveBeenCalled();
     expect(searchAdd).not.toHaveBeenCalled();
   });
 });
@@ -150,6 +164,8 @@ describe("startCampaign", () => {
 describe("resumeCampaign", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    campaignFind.mockResolvedValue(campaign());
+    accountFind.mockResolvedValue(account);
   });
 
   it("retoma DISPARO direto, sem reimportar", async () => {
@@ -178,5 +194,21 @@ describe("resumeCampaign", () => {
       expect.objectContaining({ data: { status: "IMPORTING" } }),
     );
     expect(searchAdd).toHaveBeenCalledWith("search", { campaignId: "C1" });
+  });
+
+  it("recusa retomar com conta DISCONNECTED", async () => {
+    campaignFind.mockResolvedValue(campaign({ mode: "DISPARO", searchUrl: "DISPARO" }));
+    accountFind.mockResolvedValue({ ...account, status: "DISCONNECTED" });
+    await expect(resumeCampaign("C1")).rejects.toThrow("desconectada");
+    expect(campaignUpdate).not.toHaveBeenCalled();
+    expect(notifyFn).not.toHaveBeenCalled();
+  });
+
+  it("recusa retomar quando a conta está em CHECKPOINT", async () => {
+    campaignFind.mockResolvedValue(campaign());
+    accountFind.mockResolvedValue({ ...account, status: "CHECKPOINT" });
+    await expect(resumeCampaign("C1")).rejects.toThrow("verificação");
+    expect(campaignUpdate).not.toHaveBeenCalled();
+    expect(searchAdd).not.toHaveBeenCalled();
   });
 });

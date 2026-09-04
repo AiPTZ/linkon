@@ -35,6 +35,8 @@ import {
   syncAccounts,
   connectNative,
   assertCanConnectLinkedIn,
+  markHostedIntent,
+  hasRecentHostedIntent,
 } from "./auth.service";
 import { ApiError, UnipileError } from "../utils/errors";
 import type { Account } from "@prisma/client";
@@ -136,6 +138,16 @@ describe("assertCanConnectLinkedIn", () => {
   it("bloqueia com 409 quando o usuário já possui uma conta não-rejeitada", async () => {
     accountCount.mockResolvedValue(1);
     await expect(assertCanConnectLinkedIn("U1")).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("permite reconectar quando a conta anterior está apenas DISCONNECTED", async () => {
+    let where: unknown;
+    accountCount.mockImplementation((args: { where?: unknown }) => {
+      where = args?.where;
+      return Promise.resolve(0);
+    });
+    await expect(assertCanConnectLinkedIn("U1")).resolves.toBeUndefined();
+    expect(where).toEqual({ userId: "U1", status: { notIn: ["REJECTED", "DISCONNECTED"] } });
   });
 });
 
@@ -283,5 +295,18 @@ describe("syncAccounts", () => {
     accountFind.mockResolvedValue(account);
     await syncAccounts();
     expect(accountUpdate).toHaveBeenCalled();
+  });
+});
+
+describe("hosted intent (adoção segura)", () => {
+  it("marca intenção apenas para usuário logado", () => {
+    markHostedIntent("U1");
+    markHostedIntent(null);
+    expect(hasRecentHostedIntent("U1")).toBe(true);
+    expect(hasRecentHostedIntent(null)).toBe(false);
+  });
+
+  it("não concede intenção para usuário que nunca solicitou hosted", () => {
+    expect(hasRecentHostedIntent("U-desconhecido")).toBe(false);
   });
 });

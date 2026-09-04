@@ -4,6 +4,20 @@ import { createLog } from "./log.service";
 import { notify } from "./notification.service";
 import { ApiError } from "../utils/errors";
 import { hasFlow } from "./flow.service";
+import type { Account } from "@prisma/client";
+
+export function assertAccountReady(account: Pick<Account, "id" | "status">): void {
+  if (account.status === "OK") return;
+  const message =
+    account.status === "DISCONNECTED"
+      ? "Conta LinkedIn desconectada. Reconecte antes de iniciar."
+      : account.status === "CHECKPOINT"
+        ? "Conta LinkedIn aguardando verificação. Conclua a verificação antes de iniciar."
+        : account.status === "REJECTED"
+          ? "Conexão LinkedIn recusada. Conecte novamente antes de iniciar."
+          : "Conta LinkedIn ainda não está pronta. Aguarde a conexão concluir antes de iniciar.";
+  throw new ApiError(400, message);
+}
 
 export async function startCampaign(id: string): Promise<void> {
   const campaign = await prisma.campaign.findUnique({ where: { id } });
@@ -12,9 +26,7 @@ export async function startCampaign(id: string): Promise<void> {
 
   const account = await prisma.account.findUnique({ where: { id: campaign.accountId } });
   if (!account) throw new ApiError(400, "Conta vinculada não encontrada");
-  if (account.status === "DISCONNECTED") {
-    throw new ApiError(400, "Conta LinkedIn desconectada. Reconecte antes de iniciar.");
-  }
+  assertAccountReady(account);
 
   if (campaign.mode === "DISPARO") {
     const selected = await prisma.lead.count({ where: { campaignId: id, selected: true } });
@@ -90,6 +102,11 @@ export async function pauseCampaign(id: string): Promise<void> {
 export async function resumeCampaign(id: string): Promise<void> {
   const campaign = await prisma.campaign.findUnique({ where: { id } });
   if (!campaign) throw new ApiError(404, "Campanha não encontrada");
+
+  const account = await prisma.account.findUnique({ where: { id: campaign.accountId } });
+  if (!account) throw new ApiError(400, "Conta vinculada não encontrada");
+  assertAccountReady(account);
+  if (campaign.status === "RUNNING" || campaign.status === "IMPORTING") return;
 
   if (campaign.mode === "DISPARO") {
     const selected = await prisma.lead.count({ where: { campaignId: id, selected: true } });

@@ -119,6 +119,7 @@ describe("campaign POST gate agentEnabled", () => {
     (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "ACC",
       userId: "U1",
+      status: "OK",
     });
     (prisma.campaign.create as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "C1",
