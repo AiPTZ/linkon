@@ -80,24 +80,23 @@ authRouter.post("/native", ah(async (req, res) => {
   const userId = isAdmin ? (body.userId ?? null) : user.sub;
   const result = await connectNative(body.username, body.password, body.country, {
     userId,
-    approvalRequired: !isAdmin,
+    approvalRequired: false,
   });
   if (result.checkpoint) {
     return res.status(202).json({ status: "CHECKPOINT", checkpoint: result.checkpoint, accountId: result.localAccountId });
   }
-  res.status(201).json({ status: isAdmin ? "OK" : "PENDING", accountId: result.localAccountId, account: result.account });
+  res.status(201).json({ status: "OK", accountId: result.localAccountId, account: result.account });
 }));
 
 authRouter.post("/native/checkpoint", ah(async (req, res) => {
   const user = (req as Request & { user: { sub: string; role: string } }).user;
   const body = checkpointSchema.parse(req.body);
-  const isAdmin = user.role === "ADMIN";
   const result = await solveCheckpoint(body.accountId, body.code, {
-    userId: isAdmin ? null : user.sub,
-    approvalRequired: !isAdmin,
+    userId: user.role === "ADMIN" ? null : user.sub,
+    approvalRequired: false,
   });
   if (result.checkpoint) return res.status(202).json({ status: "CHECKPOINT", checkpoint: result.checkpoint });
-  res.json({ status: isAdmin ? "OK" : "PENDING", accountId: result.localAccountId });
+  res.json({ status: "OK", accountId: result.localAccountId });
 }));
 
 authRouter.post("/hosted", ah(async (req, res) => {

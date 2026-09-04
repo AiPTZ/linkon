@@ -179,6 +179,37 @@ describe("confirmHosted", () => {
     expect(res.accounts).toBe(0);
     expect(accountUpsert).not.toHaveBeenCalled();
   });
+
+  it("adota conta hosted recém-criada sem prefixo (nome = LinkedIn) para o usuário", async () => {
+    listAccounts.mockResolvedValue({
+      items: [
+        {
+          id: "UA9",
+          name: "Paula Mariah",
+          created_at: new Date().toISOString(),
+          sources: [{ id: "s1", status: "OK" }],
+        },
+      ],
+    });
+    const res = await confirmHosted("U1", { pending: false });
+    expect(res.accounts).toBe(1);
+    expect(accountUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ userId: "U1" }) }),
+    );
+  });
+
+  it("não adota quando há mais de uma conta recente sem dono (evita erro de atribuição)", async () => {
+    const now = new Date().toISOString();
+    listAccounts.mockResolvedValue({
+      items: [
+        { id: "UA10", name: "Pessoa A", created_at: now, sources: [{ id: "s1", status: "OK" }] },
+        { id: "UA11", name: "Pessoa B", created_at: now, sources: [{ id: "s1", status: "OK" }] },
+      ],
+    });
+    const res = await confirmHosted("U1", { pending: false });
+    expect(res.accounts).toBe(0);
+    expect(accountUpsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("confirmHosted (sync de rede)", () => {

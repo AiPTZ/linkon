@@ -140,7 +140,52 @@ export async function confirmHosted(
       await contactsQueue.add("sync-network", { accountId: local.id });
     }
   }
+
+  if (matched.length === 0 && userId) {
+    created += await adoptRecentHosted(userId, items, opts);
+  }
   return { accounts: created };
+}
+
+async function adoptRecentHosted(
+  userId: string,
+  items: UnipileAccount[],
+  opts: { pending: boolean },
+): Promise<number> {
+  const cutoff = Date.now() - 30 * 60_000;
+  const candidates: { acc: UnipileAccount; local: { id: string } | null }[] = [];
+  for (const acc of items) {
+    const providerStatus = acc.sources?.[0]?.status ?? acc.status ?? "OK";
+    if (providerStatus !== "OK") continue;
+    const createdAt = acc.created_at ? Date.parse(acc.created_at) : NaN;
+    if (Number.isNaN(createdAt) || createdAt < cutoff) continue;
+    const local = await prisma.account.findUnique({ where: { unipileAccountId: acc.id } });
+    if (local?.userId && local.userId !== userId) continue;
+    if (local?.userId === userId) continue;
+    candidates.push({ acc, local });
+  }
+  if (candidates.length !== 1) return 0;
+  try {
+    await assertCanConnectLinkedIn(userId);
+  } catch {
+    return 0;
+  }
+  const { acc, local } = candidates[0];
+  const status = opts.pending ? "PENDING_LINKEDIN" : "OK";
+  const account = await prisma.account.upsert({
+    where: { unipileAccountId: acc.id },
+    update: { status, username: acc.name, userId },
+    create: { unipileAccountId: acc.id, username: acc.name, status, authMethod: "HOSTED", userId },
+  });
+  if (status === "OK") {
+    await contactsQueue.add("sync-network", { accountId: local?.id ?? account.id });
+  }
+  await createLog({
+    type: "ACCOUNT_CONNECTED",
+    message: `Conta LinkedIn "${acc.name}" conectada via assistente (hosted)`,
+    accountId: local?.id ?? account.id,
+  });
+  return 1;
 }
 
 export async function registerWebhooks(): Promise<{ messagingId?: string; usersId?: string }> {

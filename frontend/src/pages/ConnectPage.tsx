@@ -71,7 +71,9 @@ export function ConnectPage() {
     if (params.get("hosted") === "ok") {
       api
         .post<{ accounts: number }>("/accounts/confirm-hosted")
-        .then((r) => toast("success", r.accounts > 0 ? "Conta conectada e enviada para aprovação" : "Aguardando conexão..."))
+        .then((r) =>
+          toast("success", r.accounts > 0 ? "Conta LinkedIn conectada com sucesso" : "Verificando conexão..."),
+        )
         .catch((e) => toastFromError(toast, e))
         .finally(loadAccounts);
     }
@@ -87,12 +89,7 @@ export function ConnectPage() {
         setCheckpointType(res.checkpoint ?? null);
         setPassword("");
       } else {
-        toast(
-          "success",
-          res.status === "PENDING"
-            ? "Conta conectada! Aguardando aprovação do administrador"
-            : "Conta conectada com sucesso",
-        );
+        toast("success", "Conta conectada com sucesso");
         setUsername("");
         setPassword("");
         setNativeOpen(false);
@@ -119,12 +116,7 @@ export function ConnectPage() {
         setCode("");
         toast("warning", `Verificação adicional solicitada: ${res.checkpoint}`);
       } else {
-        toast(
-          "success",
-          res.status === "PENDING"
-            ? "Verificação concluída. Conta enviada para aprovação!"
-            : "Verificação concluída. Conta conectada!",
-        );
+        toast("success", "Verificação concluída. Conta conectada!");
         setCheckpointAccountId(null);
         setCode("");
         setNativeOpen(false);

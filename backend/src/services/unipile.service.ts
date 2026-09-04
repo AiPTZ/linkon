@@ -12,6 +12,7 @@ export interface UnipileAccount {
   name: string;
   type: string;
   status?: string;
+  created_at?: string;
   sources?: { id: string; status: string }[];
   connection_params?: unknown;
 }

@@ -2,7 +2,7 @@ import { Router, type Request } from "express";
 import { prisma } from "../lib/prisma";
 import { syncAccounts, disconnectAccount, confirmHosted } from "../services/auth.service";
 import { previewRelations } from "../services/sweep.service";
-import { currentUser, resolveScope } from "../utils/scope";
+import { resolveScope } from "../utils/scope";
 import { ApiError } from "../utils/errors";
 import { ah } from "./handler";
 
@@ -11,10 +11,8 @@ export const accountsRouter = Router();
 accountsRouter.post(
   "/confirm-hosted",
   ah(async (req, res) => {
-    const user = currentUser(req);
     const scope = resolveScope(req);
-    const pending = user.role === "USER" || (user.role === "ADMIN" && scope.userId !== null);
-    const result = await confirmHosted(scope.userId, { pending });
+    const result = await confirmHosted(scope.userId, { pending: false });
     res.json(result);
   }),
 );
