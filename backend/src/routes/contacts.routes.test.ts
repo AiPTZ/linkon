@@ -165,6 +165,22 @@ describe("POST /sync", () => {
     expect(res.body).toEqual({ ok: true });
   });
 
+  it("propaga autoScrape para o job", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "A1",
+      userId: "U1",
+    });
+    const { res, next } = await invokeRoute("post", "/sync", {
+      body: { accountId: "A1", autoScrape: true },
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(contactsQueue.add).toHaveBeenCalledWith("sync-network", {
+      accountId: "A1",
+      autoScrape: true,
+    });
+    expect(res.body).toEqual({ ok: true });
+  });
+
   it("rejeita conta fora do escopo", async () => {
     (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "A2",
@@ -213,5 +229,20 @@ describe("POST /scrape", () => {
     expect(next).not.toHaveBeenCalled();
     expect(scheduleContactScrape).toHaveBeenCalledWith("A1", ["CT1"]);
     expect(res.body).toEqual({ ok: true, scheduled: 1 });
+  });
+
+  it("com accountId + onlyMissing agenda extração dos faltantes da conta", async () => {
+    (prisma.account.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "A1",
+      userId: "U1",
+    });
+    (scheduleContactScrape as ReturnType<typeof vi.fn>).mockResolvedValue({ scheduled: 3 });
+    const { res, next } = await invokeRoute("post", "/scrape", {
+      body: { accountId: "A1", onlyMissing: true },
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(prisma.account.findMany).not.toHaveBeenCalled();
+    expect(scheduleContactScrape).toHaveBeenCalledWith("A1", undefined, { onlyMissing: true });
+    expect(res.body).toEqual({ ok: true, scheduled: 3 });
   });
 });

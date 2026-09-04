@@ -85,6 +85,7 @@ describe("syncAccountNetwork", () => {
         name: "João",
         headline: "Dev",
         profileUrl: "https://linkedin.com/in/m1",
+        networkDistance: "FIRST_DEGREE",
       },
     });
     expect(unipile.getRelations).toHaveBeenNthCalledWith(1, "UA1", undefined, 1000);
@@ -155,6 +156,16 @@ describe("scheduleContactScrape", () => {
     contactFindMany.mockResolvedValue([]);
     await scheduleContactScrape("A1");
     expect(contactFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { accountId: "A1", scrapedAt: null } }));
+  });
+
+  it("com onlyMissing, seleciona contatos sem e-mail ou telefone", async () => {
+    contactFindMany.mockResolvedValue([]);
+    await scheduleContactScrape("A1", [], { onlyMissing: true });
+    const where = contactFindMany.mock.calls[0][0].where;
+    expect(where.accountId).toBe("A1");
+    expect(where.OR).toHaveLength(2);
+    expect(JSON.stringify(where.OR)).toContain('"phones"');
+    expect(JSON.stringify(where.OR)).toContain('"emails"');
   });
 });
 

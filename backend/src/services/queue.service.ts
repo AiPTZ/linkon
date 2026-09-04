@@ -38,4 +38,5 @@ export interface ContactScrapeJob {
 
 export interface ContactsSyncJob {
   accountId: string;
+  autoScrape?: boolean;
 }

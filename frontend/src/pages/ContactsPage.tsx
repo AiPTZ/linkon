@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Contact as ContactIcon,
   Download,
@@ -43,8 +43,10 @@ export function ContactsPage() {
   const [onlyWithContact, setOnlyWithContact] = useState(false);
   const [accountId, setAccountId] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [detail, setDetail] = useState<Contact | null>(null);
+  const headerRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const load = useCallback(() => {
@@ -63,6 +65,8 @@ export function ContactsPage() {
 
   useEffect(() => {
     load();
+    setSelected(new Set());
+    setSelectAll(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, onlyWithContact]);
 
@@ -84,15 +88,21 @@ export function ContactsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  async function onSync() {
+  async function onSweep() {
     if (!accountId) {
       toast("error", "Selecione uma conta LinkedIn conectada.");
       return;
     }
-    setBusy("sync");
+    setBusy("sweep");
     try {
-      await api.post<{ ok: boolean }>("/contacts/sync", { accountId });
-      toast("success", "Sincronização da rede iniciada");
+      await api.post<{ ok: boolean }>("/contacts/sync", { accountId, autoScrape: true });
+      toast(
+        "success",
+        "Varredura iniciada. As conexões serão sincronizadas e a extração de e-mails/telefones agendada automaticamente.",
+      );
+      window.setTimeout(load, 6000);
+      window.setTimeout(load, 20000);
+      window.setTimeout(load, 60000);
     } catch (err) {
       toastFromError(toast, err);
     } finally {
@@ -101,16 +111,33 @@ export function ContactsPage() {
   }
 
   async function onScrape() {
-    const ids = Array.from(selected);
-    if (ids.length === 0) {
-      toast("error", "Selecione ao menos um contato.");
+    if (!accountId) {
+      toast("error", "Selecione uma conta LinkedIn conectada.");
       return;
     }
     setBusy("scrape");
     try {
-      await api.post<{ ok: boolean; scheduled: number }>("/contacts/scrape", { contactIds: ids });
-      toast("success", `Scraping de ${ids.length} contato(s) agendado`);
-      setSelected(new Set());
+      if (selectAll) {
+        const r = await api.post<{ ok: boolean; scheduled: number }>("/contacts/scrape", {
+          accountId,
+          onlyMissing: true,
+        });
+        if (r.scheduled > 0) {
+          toast("success", `Extração de ${r.scheduled} contato(s) sem e-mail/telefone agendada`);
+        } else {
+          toast("success", "Todos os contatos desta conta já possuem e-mail ou telefone extraído.");
+        }
+        setSelectAll(false);
+      } else {
+        const ids = Array.from(selected);
+        if (ids.length === 0) {
+          toast("error", "Selecione ao menos um contato.");
+          return;
+        }
+        await api.post<{ ok: boolean; scheduled: number }>("/contacts/scrape", { contactIds: ids });
+        toast("success", `Scraping de ${ids.length} contato(s) agendado`);
+        setSelected(new Set());
+      }
     } catch (err) {
       toastFromError(toast, err);
     } finally {
@@ -121,7 +148,7 @@ export function ContactsPage() {
   function onExport() {
     const params = new URLSearchParams();
     if (accountId) params.set("accountId", accountId);
-    if (selectionIds.size > 0) params.set("providerIds", Array.from(selectionIds).join(","));
+    if (!selectAll && selectionIds.size > 0) params.set("providerIds", Array.from(selectionIds).join(","));
     api
       .download(`/contacts/export-xlsx?${params.toString()}`)
       .then(() => toast("success", "Planilha exportada"))
@@ -129,6 +156,7 @@ export function ContactsPage() {
   }
 
   function toggle(id: string) {
+    if (selectAll) setSelectAll(false);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -136,6 +164,21 @@ export function ContactsPage() {
       return next;
     });
   }
+
+  function toggleSelectAll() {
+    if (selectAll) {
+      setSelectAll(false);
+    } else {
+      setSelected(new Set());
+      setSelectAll(true);
+    }
+  }
+
+  const partialSelection = !selectAll && selected.size > 0 && selected.size < (contacts?.length ?? 0);
+
+  useEffect(() => {
+    if (headerRef.current) headerRef.current.indeterminate = partialSelection;
+  }, [partialSelection, selectAll, contacts]);
 
   const selectionIds = useMemo(() => {
     const selectedSet = new Set<string>();
@@ -152,8 +195,9 @@ export function ContactsPage() {
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-semibold gold-gradient-text">Contatos</h1>
         <p className="mt-1 text-sm text-cream/50">
-          Sua rede de conexões do LinkedIn, armazenada automaticamente conforme a conta é conectada.
-          Contatos das campanhas de convite aceitos entram aqui também.
+          Sua rede de conexões do LinkedIn. Clique em "Varrer rede e extrair contatos" para sincronizar
+          novas conexões e extrair automaticamente e-mails e telefones dos contatos de 1º grau. Contatos
+          das campanhas de convite aceitos entram aqui também.
         </p>
       </div>
 
@@ -187,19 +231,26 @@ export function ContactsPage() {
           </label>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button type="button" className="btn btn-primary" onClick={onSync} disabled={busy !== null}>
-            {busy === "sync" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Sincronizar rede
+          <button type="button" className="btn btn-primary" onClick={onSweep} disabled={busy !== null}>
+            {busy === "sweep" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Varrer rede e extrair contatos
           </button>
-          <button type="button" className="btn" onClick={onScrape} disabled={busy !== null || selected.size === 0}>
+          <button
+            type="button"
+            className="btn"
+            onClick={onScrape}
+            disabled={busy !== null || (!selectAll && selected.size === 0)}
+          >
             {busy === "scrape" ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRound className="h-4 w-4" />}
-            Raspar contatos ({selected.size})
+            Raspar contatos ({selectAll ? total : selected.size})
           </button>
           <button type="button" className="btn" onClick={onExport} disabled={busy !== null}>
             <Download className="h-4 w-4" />
             Exportar XLSX
           </button>
-          <span className="ml-auto text-xs text-cream/50">{total} contato(s)</span>
+          <span className="ml-auto text-xs text-cream/50">
+            {selectAll ? `Todos os ${total} selecionados (filtro atual)` : `${total} contato(s)`}
+          </span>
         </div>
       </div>
 
@@ -211,8 +262,9 @@ export function ContactsPage() {
           <div>
             <h2 className="font-serif text-xl text-cream">Nenhum contato ainda</h2>
             <p className="mt-1 max-w-md text-sm text-cream/50">
-              Conecte sua conta do LinkedIn e clique em "Sincronizar rede" para armazenar suas
-              conexões. Os convites aceitos pelas campanhas entram automaticamente.
+              Conecte sua conta do LinkedIn e clique em "Varrer rede e extrair contatos" para armazenar
+              suas conexões e extrair e-mails e telefones. Os convites aceitos pelas campanhas entram
+              automaticamente.
             </p>
           </div>
         </div>
@@ -221,7 +273,16 @@ export function ContactsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-ink-600/60 text-xs uppercase tracking-wide text-cream/40">
               <tr>
-                <th className="px-4 py-3" />
+                <th className="px-4 py-3">
+                  <input
+                    ref={headerRef}
+                    type="checkbox"
+                    className="h-4 w-4 accent-gold-500"
+                    checked={selectAll}
+                    onChange={toggleSelectAll}
+                    title="Selecionar todos os que batem com o filtro atual"
+                  />
+                </th>
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">Cargo</th>
                 <th className="px-4 py-3">Conta</th>
@@ -245,7 +306,7 @@ export function ContactsPage() {
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-gold-500"
-                        checked={selected.has(c.id)}
+                        checked={selectAll || selected.has(c.id)}
                         onChange={() => toggle(c.id)}
                       />
                     </td>

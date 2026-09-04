@@ -100,6 +100,7 @@ export async function syncAccountNetwork(accountId: string): Promise<{ imported:
           name: relationName(rel),
           headline: rel.headline,
           profileUrl: rel.public_profile_url,
+          networkDistance: "FIRST_DEGREE",
         },
       });
     }
@@ -162,10 +163,18 @@ export async function scrapeContactById(contactId: string): Promise<void> {
 export async function scheduleContactScrape(
   accountId: string,
   contactIds: string[] = [],
+  options: { onlyMissing?: boolean } = {},
 ): Promise<{ scheduled: number }> {
-  const where =
-    contactIds.length > 0
-      ? { id: { in: contactIds }, accountId }
+  const where = contactIds.length > 0
+    ? { id: { in: contactIds }, accountId }
+    : options.onlyMissing
+      ? {
+          accountId,
+          OR: [
+            { OR: [{ emails: null }, { emails: "[]" }] },
+            { OR: [{ phones: null }, { phones: "[]" }] },
+          ],
+        }
       : { accountId, scrapedAt: null };
 
   const contacts = await prisma.contact.findMany({

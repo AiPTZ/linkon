@@ -16,10 +16,13 @@ export const contactsRouter = Router();
 
 export const syncSchema = z.object({
   accountId: z.string().min(1),
+  autoScrape: z.boolean().optional(),
 });
 
 export const scrapeSchema = z.object({
   contactIds: z.array(z.string()).optional(),
+  accountId: z.string().optional(),
+  onlyMissing: z.boolean().optional(),
 });
 
 export function parseListQuery(query: Record<string, unknown>): {
@@ -88,7 +91,10 @@ contactsRouter.post(
     const body = syncSchema.parse(req.body);
     const account = await prisma.account.findUnique({ where: { id: body.accountId } });
     assertAccountInScope(account, resolveScope(req).userId);
-    await contactsQueue.add("sync-network", { accountId: body.accountId });
+    await contactsQueue.add("sync-network", {
+      accountId: body.accountId,
+      ...(body.autoScrape ? { autoScrape: true } : {}),
+    });
     res.json({ ok: true });
   }),
 );
@@ -105,6 +111,9 @@ contactsRouter.post(
       if (!contact) throw new ApiError(404, "Contato não encontrado");
       assertAccountInScope(await prisma.account.findUnique({ where: { id: contact.accountId } }), scope.userId);
       accountIds = [contact.accountId];
+    } else if (body.accountId) {
+      assertAccountInScope(await prisma.account.findUnique({ where: { id: body.accountId } }), scope.userId);
+      accountIds = [body.accountId];
     } else {
       const accounts = await prisma.account.findMany({
         where: scope.userId ? { userId: scope.userId } : {},
@@ -114,9 +123,16 @@ contactsRouter.post(
       accountIds = accounts.map((account) => account.id);
     }
 
+    const hasIds = !!body.contactIds && body.contactIds.length > 0;
+    const scrapeOptions = body.onlyMissing ? { onlyMissing: true } : undefined;
+
     let scheduled = 0;
     for (const accountId of accountIds) {
-      const result = await scheduleContactScrape(accountId, body.contactIds);
+      const result = hasIds
+        ? await scheduleContactScrape(accountId, body.contactIds)
+        : scrapeOptions
+          ? await scheduleContactScrape(accountId, undefined, scrapeOptions)
+          : await scheduleContactScrape(accountId, undefined);
       scheduled += result.scheduled;
     }
     res.json({ ok: true, scheduled });

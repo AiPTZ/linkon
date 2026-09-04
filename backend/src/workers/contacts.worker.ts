@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { prisma } from "../lib/prisma";
 import { redisConnection } from "../lib/redis";
 import { scrapeLeadContact } from "../services/contacts.service";
-import { syncAccountNetwork, scrapeContactById } from "../services/network.service";
+import { syncAccountNetwork, scrapeContactById, scheduleContactScrape } from "../services/network.service";
 import { createLog } from "../services/log.service";
 import { logger } from "../utils/logger";
 import { UnipileError } from "../utils/errors";
@@ -12,8 +12,19 @@ const worker = new Worker(
   "linkon-contacts",
   async (job) => {
     if (job.name === "sync-network") {
-      const { accountId } = job.data as ContactsSyncJob;
+      const { accountId, autoScrape } = job.data as ContactsSyncJob;
       await syncAccountNetwork(accountId);
+      if (autoScrape) {
+        const { scheduled } = await scheduleContactScrape(accountId, [], { onlyMissing: true });
+        if (scheduled > 0) {
+          await createLog({
+            type: "CONTACT_SYNC",
+            message: `Rede sincronizada e extração de contatos agendada para ${scheduled} conexão(ões)`,
+            accountId,
+            payload: { scheduled },
+          });
+        }
+      }
       return;
     }
 
