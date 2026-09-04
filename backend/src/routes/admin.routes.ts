@@ -15,7 +15,7 @@ import {
   unblockUser,
 } from "../services/user.service";
 import { requireAdmin } from "../middleware/auth";
-import { ApiError } from "../utils/errors";
+import { ApiError, UnipileError } from "../utils/errors";
 import { ah } from "./handler";
 
 export const adminRouter = Router();
@@ -123,6 +123,7 @@ adminRouter.post(
     const account = await prisma.account.findUnique({ where: { id: req.params.id } });
     if (!account) throw new ApiError(404, "Conta não encontrada");
 
+    let removedOnProvider = true;
     try {
       await unipile.deleteAccount(account.unipileAccountId);
     } catch (err) {
@@ -132,15 +133,30 @@ adminRouter.post(
           "Integração não configurada. Não é possível desconectar a conta na API.",
         );
       }
-      throw err;
+      if (err instanceof UnipileError && err.isNotFound()) {
+        removedOnProvider = false;
+        await createLog({
+          type: "ACCOUNT_DISCONNECTED",
+          message: `Conta ${account.username ?? account.unipileAccountId} já não existia na API; registro local desativado`,
+          accountId: account.id,
+        });
+      } else {
+        throw err;
+      }
     }
 
     await prisma.account.update({ where: { id: account.id }, data: { status: "DISCONNECTED" } });
-    await createLog({
-      type: "ACCOUNT_DISCONNECTED",
-      message: `Conta ${account.username ?? account.unipileAccountId} desconectada`,
-      accountId: account.id,
+    await prisma.campaign.updateMany({
+      where: { accountId: account.id, status: { in: ["RUNNING", "IMPORTING"] } },
+      data: { status: "PAUSED" },
     });
+    if (removedOnProvider) {
+      await createLog({
+        type: "ACCOUNT_DISCONNECTED",
+        message: `Conta ${account.username ?? account.unipileAccountId} desconectada`,
+        accountId: account.id,
+      });
+    }
     res.json({ ok: true });
   }),
 );

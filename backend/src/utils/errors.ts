@@ -31,4 +31,12 @@ export class UnipileError extends ApiError {
   isDisconnected(): boolean {
     return this.errorType.includes("disconnected");
   }
+
+  isNotFound(): boolean {
+    return (
+      this.status === 404 ||
+      this.errorType.includes("not_found") ||
+      /not found/i.test(`${this.errorType} ${this.message}`)
+    );
+  }
 }

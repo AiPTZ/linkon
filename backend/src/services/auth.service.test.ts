@@ -36,7 +36,7 @@ import {
   connectNative,
   assertCanConnectLinkedIn,
 } from "./auth.service";
-import { ApiError } from "../utils/errors";
+import { ApiError, UnipileError } from "../utils/errors";
 import type { Account } from "@prisma/client";
 
 const accountFind = prisma.account.findUnique as ReturnType<typeof vi.fn>;
@@ -103,6 +103,27 @@ describe("disconnectAccount", () => {
     await expect(disconnectAccount("A1")).rejects.toThrow("Unipile offline");
     expect(accountUpdate).not.toHaveBeenCalled();
     expect(campaignUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("tolera conta já removida na Unipile e marca a conta local como DISCONNECTED", async () => {
+    deleteAccount.mockRejectedValue(
+      new UnipileError(404, "errors/not_found", "The requested resource were not found. Account not found"),
+    );
+
+    await expect(disconnectAccount("A1")).resolves.toBeUndefined();
+
+    const accountArg = accountUpdate.mock.calls[0][0] as {
+      where: { id: string };
+      data: { status: string };
+    };
+    expect(accountArg.where.id).toBe("A1");
+    expect(accountArg.data.status).toBe("DISCONNECTED");
+    const campaignArg = campaignUpdateMany.mock.calls[0][0] as {
+      where: { accountId: string; status: { in: string[] } };
+      data: { status: string };
+    };
+    expect(campaignArg.where.accountId).toBe("A1");
+    expect(campaignArg.data.status).toBe("PAUSED");
   });
 });
 

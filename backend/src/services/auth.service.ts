@@ -5,7 +5,7 @@ import { createLog } from "./log.service";
 import { contactsQueue } from "./queue.service";
 import { encrypt } from "../utils/crypto";
 import { env } from "../config/env";
-import { ApiError } from "../utils/errors";
+import { ApiError, UnipileError } from "../utils/errors";
 
 export interface NativeAuthResult {
   checkpoint?: string;
@@ -217,7 +217,22 @@ export async function disconnectAccount(localAccountId: string): Promise<void> {
   const local = await prisma.account.findUnique({ where: { id: localAccountId } });
   if (!local) throw new ApiError(404, "Conta não encontrada");
 
-  await unipile.deleteAccount(local.unipileAccountId);
+  let removedOnProvider = true;
+  try {
+    await unipile.deleteAccount(local.unipileAccountId);
+  } catch (err) {
+    if (err instanceof UnipileError && err.isNotFound()) {
+      removedOnProvider = false;
+      await createLog({
+        type: "ACCOUNT_DISCONNECTED",
+        level: "WARN",
+        message: `Conta ${local.username ?? local.unipileAccountId} já não existia no provedor; registro local desativado`,
+        accountId: localAccountId,
+      });
+    } else {
+      throw err;
+    }
+  }
 
   await prisma.$transaction([
     prisma.account.update({
@@ -229,10 +244,12 @@ export async function disconnectAccount(localAccountId: string): Promise<void> {
       data: { status: "PAUSED" },
     }),
   ]);
-  await createLog({
-    type: "ACCOUNT_DISCONNECTED",
-    level: "WARN",
-    message: `Conta ${local.username ?? local.unipileAccountId} desconectada do LinkedIn`,
-    accountId: localAccountId,
-  });
+  if (removedOnProvider) {
+    await createLog({
+      type: "ACCOUNT_DISCONNECTED",
+      level: "WARN",
+      message: `Conta ${local.username ?? local.unipileAccountId} desconectada do LinkedIn`,
+      accountId: localAccountId,
+    });
+  }
 }
