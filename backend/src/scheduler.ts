@@ -2,19 +2,29 @@ import cron from "node-cron";
 import { prisma } from "./lib/prisma";
 import { invitesQueue, sweepQueue } from "./services/queue.service";
 import { refreshCounters, withinLimits } from "./services/invite.service";
-import { hasFlow, parseFlow, processFlowStep } from "./services/flow.service";
+import { hasFlow, parseFlow, processFlowStep, advanceOnEvent } from "./services/flow.service";
 import { createLog } from "./services/log.service";
 import { notify } from "./services/notification.service";
 import { refreshAgentCounters } from "./services/native-agent.service";
+import { upsertRelationContact, relationName } from "./services/network.service";
+import { unipile } from "./services/unipile.service";
 import { logger } from "./utils/logger";
-import { randomDelayMs, isWorkHour } from "./utils/time";
+import { randomDelayMs, isWorkHour, sleep } from "./utils/time";
 import { parseCadence } from "./utils/cadence";
-import type { Campaign } from "@prisma/client";
+import type { Campaign, Lead } from "@prisma/client";
+
+const lastAcceptReconcileAt = new Map<string, number>();
+const ACCEPT_RECONCILE_TTL_MS = 10 * 60_000;
 
 export function startScheduler(): void {
   cron.schedule("*/5 * * * *", async () => {
     try {
-      await Promise.all([processCampaigns(), refreshAgentCountersForAll(), expireStaleScheduling()]);
+      await Promise.all([
+        processCampaigns(),
+        reconcileInviteAcceptances(),
+        refreshAgentCountersForAll(),
+        expireStaleScheduling(),
+      ]);
     } catch (err) {
       logger.error("scheduler error", err);
     }
@@ -27,6 +37,85 @@ export function startScheduler(): void {
     }
   });
   logger.info("Scheduler started (runs every 5 minutes)");
+}
+
+export async function reconcileInviteAcceptances(): Promise<number> {
+  const campaigns = await prisma.campaign.findMany({
+    where: { mode: "SEARCH", status: { in: ["RUNNING", "PAUSED", "LIMIT_HIT"] } },
+  });
+  if (campaigns.length === 0) return 0;
+
+  const byAccount = new Map<string, Campaign[]>();
+  for (const c of campaigns) {
+    const list = byAccount.get(c.accountId) ?? [];
+    list.push(c);
+    byAccount.set(c.accountId, list);
+  }
+
+  let matched = 0;
+  for (const [accountId, accountCampaigns] of byAccount) {
+    const last = lastAcceptReconcileAt.get(accountId) ?? 0;
+    if (Date.now() - last < ACCEPT_RECONCILE_TTL_MS) continue;
+
+    const account = await prisma.account.findUnique({ where: { id: accountId } });
+    if (!account || account.status !== "OK") {
+      lastAcceptReconcileAt.set(accountId, Date.now());
+      continue;
+    }
+
+    const campaignById = new Map(accountCampaigns.map((c) => [c.id, c]));
+    const invited = await prisma.lead.findMany({
+      where: { campaignId: { in: accountCampaigns.map((c) => c.id) }, status: "INVITED" },
+      select: { id: true, campaignId: true, providerId: true },
+    });
+    if (invited.length === 0) {
+      lastAcceptReconcileAt.set(accountId, Date.now());
+      continue;
+    }
+
+    const wanted = new Map(invited.map((l) => [l.providerId, l]));
+    const remaining = new Set(wanted.keys());
+
+    try {
+      let cursor: string | undefined;
+      do {
+        const page = await unipile.getRelations(account.unipileAccountId, cursor, 1000);
+        for (const rel of page.items ?? []) {
+          if (!remaining.delete(rel.member_id)) continue;
+          const lead = wanted.get(rel.member_id);
+          if (!lead) continue;
+          const campaign = campaignById.get(lead.campaignId);
+          if (!campaign) continue;
+          const relFullName = relationName(rel);
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { status: "ACCEPTED", acceptedAt: new Date() },
+          });
+          await upsertRelationContact(accountId, rel.member_id, relFullName ?? undefined);
+          await createLog({
+            type: "INVITE_ACCEPTED",
+            message: `Convite aceito por ${relFullName || rel.member_id} (verificação de rede)`,
+            campaignId: lead.campaignId,
+            leadId: lead.id,
+          });
+          const full = await prisma.lead.findUnique({ where: { id: lead.id } });
+          if (full) {
+            await advanceOnEvent(campaign, { ...full, status: "ACCEPTED" } as Lead);
+          }
+          matched += 1;
+        }
+        cursor = page.cursor ?? undefined;
+        if (cursor && remaining.size > 0) await sleep(1500);
+      } while (cursor && remaining.size > 0);
+    } catch (err) {
+      logger.warn(`reconcileInviteAcceptances error for account ${accountId}: ${(err as Error).message}`);
+    }
+    lastAcceptReconcileAt.set(accountId, Date.now());
+  }
+  if (matched > 0) {
+    logger.info(`reconcileInviteAcceptances: ${matched} convite(s) marcado(s) como aceito pela verificação de rede`);
+  }
+  return matched;
 }
 
 export async function expireStaleScheduling(): Promise<void> {
