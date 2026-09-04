@@ -64,7 +64,7 @@ const STEPS = [
   },
   {
     title: "Conecte sua conta do LinkedIn",
-    desc: "Na página Conta LinkedIn, conecte pelo login nativo (e-mail e senha) ou pelo Assistente. Contas de usuários passam por aprovação do administrador antes de entrar em campanhas.",
+    desc: "Na página Conta LinkedIn, conecte pelo login nativo (e-mail e senha) ou pelo Assistente. A conexão é validada na hora e a conta já fica disponível para uso nas campanhas.",
   },
   {
     title: "Crie a campanha de convites",

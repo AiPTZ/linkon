@@ -30,7 +30,7 @@ const STEPS: Step[] = [
   {
     n: 2,
     title: "Conecte sua conta do LinkedIn",
-    text: "Na página Conta LinkedIn, use o login nativo (e-mail e senha) ou o Assistente (conexão guiada em nova aba). Usuários comuns têm limite de 1 conta e a conexão fica Aguardando aprovação até o administrador liberar em Administração → Contas LinkedIn. O administrador conecta quantas contas precisar e já usa na hora.",
+    text: "Na página Conta LinkedIn, use o login nativo (e-mail e senha) ou o Assistente (conexão guiada em nova aba). A conexão é validada na hora: assim que o login confirma, a conta fica disponível imediatamente para uso nas campanhas. Cada usuário tem limite de 1 conta do LinkedIn.",
     action: { to: "/conectar", label: "Conectar conta" },
     icon: UserPlus,
   },

@@ -243,8 +243,7 @@ export function ConnectPage() {
         </div>
         {!isAdmin && (
           <p className="mt-3 text-xs text-cream/40">
-            Conexões de usuários passam pela aprovação do administrador antes de serem usadas nas
-            campanhas.
+            A conta fica conectada na hora e já pode ser usada nas campanhas.
           </p>
         )}
         </>
